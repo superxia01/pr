@@ -36,6 +36,10 @@ import type {
   CreditAccount,
   TransactionsResponse,
   RechargeRequest,
+  Withdrawal,
+  CreateWithdrawalRequest,
+  AuditWithdrawalRequest,
+  WithdrawalsResponse,
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
@@ -505,6 +509,47 @@ export const creditApi = {
     const response = await api.post<{ message: string; account: CreditAccount }>(
       '/api/v1/credit/recharge',
       data
+    )
+    return response.data
+  },
+}
+
+// 提现API
+export const withdrawalApi = {
+  // 申请提现
+  createWithdrawal: async (data: CreateWithdrawalRequest) => {
+    const response = await api.post<{ message: string; withdrawal: Withdrawal }>(
+      '/api/v1/withdrawals',
+      data
+    )
+    return response.data
+  },
+
+  // 获取提现记录列表
+  getWithdrawals: async (params?: { page?: number; page_size?: number; status?: string }) => {
+    const response = await api.get<WithdrawalsResponse>('/api/v1/withdrawals', { params })
+    return response.data
+  },
+
+  // 获取提现详情
+  getWithdrawal: async (id: string) => {
+    const response = await api.get<Withdrawal>(`/api/v1/withdrawals/${id}`)
+    return response.data
+  },
+
+  // 审核提现（仅超管）
+  auditWithdrawal: async (id: string, data: AuditWithdrawalRequest) => {
+    const response = await api.post<{ message: string; withdrawal: Withdrawal }>(
+      `/api/v1/withdrawals/${id}/audit`,
+      data
+    )
+    return response.data
+  },
+
+  // 处理打款（仅超管）
+  processWithdrawal: async (id: string) => {
+    const response = await api.post<{ message: string; withdrawal: Withdrawal }>(
+      `/api/v1/withdrawals/${id}/process`
     )
     return response.data
   },

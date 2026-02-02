@@ -102,6 +102,32 @@ export default function Dashboard() {
                   </a>
                 </>
               )}
+              <a
+                href="/recharge"
+                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                充值
+              </a>
+              <a
+                href="/credit-transactions"
+                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                积分明细
+              </a>
+              <a
+                href="/withdrawals"
+                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+              >
+                提现记录
+              </a>
+              {isSuperAdmin() && (
+                <a
+                  href="/withdrawal-review"
+                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  提现审核
+                </a>
+              )}
               <span className="text-sm text-gray-700">
                 欢迎，{user?.nickname || '用户'}
               </span>
@@ -224,6 +250,24 @@ export default function Dashboard() {
                       </a>
                     </div>
                   </>
+                )}
+                <div>
+                  <a
+                    href="/withdrawals"
+                    className="text-yellow-700 hover:text-yellow-800 underline"
+                  >
+                    查看提现记录 →
+                  </a>
+                </div>
+                {isSuperAdmin() && (
+                  <div>
+                    <a
+                      href="/withdrawal-review"
+                      className="text-yellow-700 hover:text-yellow-800 underline"
+                    >
+                      审核提现申请 →
+                    </a>
+                  </div>
                 )}
               </div>
             </div>

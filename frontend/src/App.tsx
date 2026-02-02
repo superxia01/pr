@@ -11,6 +11,11 @@ import CreatorProfile from './pages/CreatorProfile'
 import TaskHall from './pages/TaskHall'
 import MyTasks from './pages/MyTasks'
 import CreateCampaign from './pages/CreateCampaign'
+import Recharge from './pages/Recharge'
+import CreditTransactions from './pages/CreditTransactions'
+import Withdrawal from './pages/Withdrawal'
+import Withdrawals from './pages/Withdrawals'
+import WithdrawalReview from './pages/WithdrawalReview'
 
 function App() {
   return (
@@ -87,6 +92,46 @@ function App() {
             element={
               <ProtectedRoute>
                 <CreateCampaign />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/recharge"
+            element={
+              <ProtectedRoute>
+                <Recharge />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/credit-transactions"
+            element={
+              <ProtectedRoute>
+                <CreditTransactions />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/withdrawal"
+            element={
+              <ProtectedRoute>
+                <Withdrawal />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/withdrawals"
+            element={
+              <ProtectedRoute>
+                <Withdrawals />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/withdrawal-review"
+            element={
+              <ProtectedRoute>
+                <WithdrawalReview />
               </ProtectedRoute>
             }
           />

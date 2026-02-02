@@ -401,3 +401,40 @@ export interface RechargeRequest {
   amount: number
 }
 
+// 提现类型
+export interface Withdrawal {
+  id: string
+  accountId: string
+  amount: number
+  fee: number
+  actualAmount: number
+  method: 'ALIPAY' | 'WECHAT' | 'BANK'
+  accountInfo: string // JSONB string
+  accountInfoHash: string
+  status: 'pending' | 'approved' | 'rejected' | 'completed'
+  auditNote: string
+  auditedBy: string | null
+  auditedAt: string | null
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
+  account?: CreditAccount
+  auditor?: User
+}
+
+export interface CreateWithdrawalRequest {
+  amount: number
+  method: 'ALIPAY' | 'WECHAT' | 'BANK'
+  accountInfo: Record<string, any>
+}
+
+export interface AuditWithdrawalRequest {
+  approved: boolean
+  auditNote?: string
+}
+
+export interface WithdrawalsResponse {
+  withdrawals: Withdrawal[]
+  total: number
+}
+

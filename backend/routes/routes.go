@@ -19,6 +19,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 	campaignController := controllers.NewCampaignController(db)
 	taskController := controllers.NewTaskController(db)
 	creditController := controllers.NewCreditController(db)
+	withdrawalController := &controllers.WithdrawalController{DB: db}
 
 	// API路由组
 	v1 := r.Group("/api/v1")
@@ -108,6 +109,13 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 			protected.GET("/credit/balance", creditController.GetAccountBalance)
 			protected.GET("/credit/transactions", creditController.GetTransactions)
 			protected.POST("/credit/recharge", creditController.Recharge)
+
+			// 提现管理
+			protected.POST("/withdrawals", withdrawalController.CreateWithdrawal)
+			protected.GET("/withdrawals", withdrawalController.GetWithdrawals)
+			protected.GET("/withdrawals/:id", withdrawalController.GetWithdrawal)
+			protected.POST("/withdrawals/:id/audit", withdrawalController.AuditWithdrawal)
+			protected.POST("/withdrawals/:id/process", withdrawalController.ProcessWithdrawal)
 		}
 	}
 }
