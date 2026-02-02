@@ -1,4 +1,6 @@
 import { useAuth } from '../contexts/AuthContext'
+import { getRoleName } from '../lib/roles'
+import MobileNav from '../components/MobileNav'
 
 export default function Dashboard() {
   const { user, logout } = useAuth()
@@ -31,13 +33,16 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
-      <nav className="bg-white shadow-sm border-b border-gray-200">
+      <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">PR Business</h1>
+            <div className="flex items-center gap-3">
+              {/* 移动端导航按钮 */}
+              <MobileNav onLogout={logout} />
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900">PR Business</h1>
             </div>
-            <div className="flex items-center gap-4">
+            {/* 桌面端导航链接 */}
+            <div className="hidden md:flex items-center gap-2 lg:gap-4">
               {canManageInvitations() && (
                 <a
                   href="/invitations"
@@ -110,33 +115,40 @@ export default function Dashboard() {
               </a>
               <a
                 href="/credit-transactions"
-                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                className="px-3 lg:px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
               >
                 积分明细
               </a>
               <a
                 href="/withdrawals"
-                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                className="px-3 lg:px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
               >
                 提现记录
               </a>
               {isSuperAdmin() && (
                 <a
                   href="/withdrawal-review"
-                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                  className="px-3 lg:px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
                 >
                   提现审核
                 </a>
               )}
-              <span className="text-sm text-gray-700">
+              <div className="h-6 w-px bg-gray-300 mx-2"></div>
+              <span className="text-sm text-gray-700 hidden lg:inline">
                 欢迎，{user?.nickname || '用户'}
               </span>
               <button
                 onClick={logout}
-                className="px-4 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-3 lg:px-4 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
               >
                 退出登录
               </button>
+            </div>
+            {/* 移动端用户信息 */}
+            <div className="flex md:hidden items-center gap-2">
+              <span className="text-sm text-gray-700 hidden sm:inline">
+                {user?.nickname || '用户'}
+              </span>
             </div>
           </div>
         </div>
@@ -150,14 +162,21 @@ export default function Dashboard() {
           <div className="space-y-4">
             <div className="p-4 bg-blue-50 rounded-lg">
               <h3 className="font-medium text-blue-900">当前角色</h3>
-              <p className="text-blue-700">{user?.currentRole || '未设置'}</p>
+              <p className="text-blue-700 text-lg font-semibold">
+                {user?.currentRole ? getRoleName(user.currentRole) : '未设置'}
+              </p>
+              {user?.currentRole && (
+                <p className="text-blue-600 text-sm mt-1">({user.currentRole})</p>
+              )}
             </div>
 
             <div className="p-4 bg-green-50 rounded-lg">
               <h3 className="font-medium text-green-900">拥有角色</h3>
               <ul className="text-green-700 list-disc list-inside">
                 {user?.roles.map((role) => (
-                  <li key={role}>{role}</li>
+                  <li key={role}>
+                    {getRoleName(role)} <span className="text-green-600">({role})</span>
+                  </li>
                 ))}
               </ul>
             </div>
