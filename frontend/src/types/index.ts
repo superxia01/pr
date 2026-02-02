@@ -90,3 +90,170 @@ export interface UseInvitationCodeResponse {
   codeType: string
   ownerId: string
 }
+
+// 商家类型
+export interface Merchant {
+  id: string
+  adminId: string
+  providerId: string
+  userId: string
+  name: string
+  description: string
+  logoUrl: string
+  industry: string
+  status: 'active' | 'suspended' | 'inactive'
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+  admin?: User
+  provider?: ServiceProvider
+  user?: User
+  staff?: MerchantStaff[]
+}
+
+export interface CreateMerchantRequest {
+  providerId: string
+  userId: string
+  name: string
+  description?: string
+  logoUrl?: string
+  industry?: string
+}
+
+export interface UpdateMerchantRequest {
+  name?: string
+  description?: string
+  logoUrl?: string
+  industry?: string
+  status?: 'active' | 'suspended' | 'inactive'
+}
+
+// 商家员工类型
+export interface MerchantStaff {
+  id: string
+  userId: string
+  merchantId: string
+  title: string
+  status: 'active' | 'inactive'
+  createdAt: string
+  updatedAt: string
+  user?: User
+  merchant?: Merchant
+  permissions?: MerchantStaffPermission[]
+}
+
+export interface AddMerchantStaffRequest {
+  userId: string
+  title?: string
+  permissions: string[]
+}
+
+export interface MerchantStaffPermission {
+  id: string
+  staffId: string
+  permissionCode: string
+  grantedAt: string
+  grantedBy: string
+}
+
+// 服务商类型
+export interface ServiceProvider {
+  id: string
+  adminId: string
+  userId: string
+  name: string
+  description: string
+  logoUrl: string
+  status: 'active' | 'suspended' | 'inactive'
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+  admin?: User
+  user?: User
+  staff?: ServiceProviderStaff[]
+  merchants?: Merchant[]
+}
+
+export interface CreateServiceProviderRequest {
+  userId: string
+  name: string
+  description?: string
+  logoUrl?: string
+}
+
+export interface UpdateServiceProviderRequest {
+  name?: string
+  description?: string
+  logoUrl?: string
+  status?: 'active' | 'suspended' | 'inactive'
+}
+
+// 服务商员工类型
+export interface ServiceProviderStaff {
+  id: string
+  userId: string
+  providerId: string
+  title: string
+  status: 'active' | 'inactive'
+  createdAt: string
+  updatedAt: string
+  user?: User
+  provider?: ServiceProvider
+  permissions?: ServiceProviderStaffPermission[]
+}
+
+export interface AddServiceProviderStaffRequest {
+  userId: string
+  title?: string
+  permissions: string[]
+}
+
+export interface ServiceProviderStaffPermission {
+  id: string
+  staffId: string
+  permissionCode: string
+  grantedAt: string
+  grantedBy: string
+}
+
+// 达人类型
+export interface Creator {
+  id: string
+  userId: string
+  isPrimary: boolean
+  level: 'UGC' | 'KOC' | 'INF' | 'KOL'
+  followersCount: number
+  wechatOpenId: string
+  wechatNickname: string
+  wechatAvatar: string
+  inviterId: string | null
+  inviterType: string | null
+  inviterRelationshipBroken: boolean
+  status: 'active' | 'banned' | 'inactive'
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+  user?: User
+  inviter?: User
+}
+
+export interface UpdateCreatorRequest {
+  level?: 'UGC' | 'KOC' | 'INF' | 'KOL'
+  followersCount?: number
+  wechatOpenId?: string
+  wechatNickname?: string
+  wechatAvatar?: string
+  status?: 'active' | 'banned' | 'inactive'
+}
+
+export interface CreatorsResponse {
+  data: Creator[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface CreatorLevelStats {
+  level: string
+  count: number
+}
