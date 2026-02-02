@@ -17,8 +17,8 @@
 
 ## 📊 当前进度
 
-**当前阶段**: 阶段4 - 用户管理
-**进度**: 100% (4/4) ✅
+**当前阶段**: 阶段7 - 提现功能
+**进度**: 100% (3/3) ✅
 **完成时间**: 2026-02-02
 
 ---
@@ -751,6 +751,177 @@ pr-business/
 
 #### 下一步：
 - 阶段5：任务系统核心（营销活动、任务名额、提交流程）
+
+---
+
+### 2026-02-02 (续5)
+
+**阶段5：任务系统核心** ✅ 已完成
+
+#### 完成内容：
+1. ✅ 营销活动管理
+   - `backend/models/campaign.go` - 活动和任务模型（120行）
+   - `backend/controllers/campaign.go` - 活动CRUD接口（450+行）
+   - 创建营销活动（预分配任务名额）
+   - 获取活动列表、获取详情、更新、删除
+   - 获取我的营销活动
+   - 状态流转：DRAFT → OPEN → CLOSED
+
+2. ✅ 任务名额系统
+   - `backend/controllers/task.go` - 任务管理接口（500+行）
+   - 获取任务大厅（分页）
+   - 接任务（OPEN → ASSIGNED）
+   - 提交任务（ASSIGNED → SUBMITTED）
+   - 审核任务（SUBMITTED → APPROVED/REJECTED）
+   - 获取我的任务、待审核任务列表
+
+3. ✅ 积分结算系统
+   - `backend/models/credit.go` - 积分账户和流水模型（100+行）
+   - `backend/controllers/credit.go` - 积分管理接口（280+行）
+   - 获取账户余额（根据角色自动确定账户类型）
+   - 获取积分流水（分页）
+   - 充值接口（模拟支付）
+
+4. ✅ 路由配置
+   - 营销活动：6个端点
+   - 任务管理：9个端点
+   - 积分管理：3个端点
+
+5. ✅ 前端类型定义
+   - `frontend/src/types/index.ts` - 添加活动、任务、积分类型（100+行）
+   - Campaign、Task、CreditAccount、CreditTransaction 等
+
+6. ✅ 前端API服务
+   - `frontend/src/services/api.ts` - 添加 3个API模块（150+行）
+   - campaignApi、taskApi、creditApi
+
+7. ✅ 前端页面组件
+   - `frontend/src/pages/TaskHall.tsx` - 任务大厅页面（200+行）
+   - `frontend/src/pages/MyTasks.tsx` - 我的任务页面（350+行）
+   - `frontend/src/pages/CreateCampaign.tsx` - 创建活动页面（300+行）
+
+8. ✅ 路由和导航更新
+   - `frontend/src/App.tsx` - 添加 3个新路由
+   - `frontend/src/pages/Dashboard.tsx` - 添加导航链接
+
+#### 功能特性：
+- 营销活动支持多平台选择（抖音、快手、小红书等）
+- 任务名额预分配机制，避免并发冲突
+- 任务状态流转：OPEN → ASSIGNED → SUBMITTED → APPROVED/REJECTED
+- 拒绝的任务可以重新提交
+- 积分账户支持三种类型：ORG_MERCHANT、ORG_PROVIDER、USER_PERSONAL
+- 积分流水记录balanceBefore和balanceAfter，便于审计
+
+#### 输出文件：
+- `backend/models/campaign.go` - 活动模型（120行）
+- `backend/controllers/campaign.go` - 活动控制器（460行）
+- `backend/controllers/task.go` - 任务控制器（520行）
+- `backend/models/credit.go` - 积分模型（110行）
+- `backend/controllers/credit.go` - 积分控制器（280行）
+- `frontend/src/types/index.ts` - 类型定义（新增100+行）
+- `frontend/src/services/api.ts` - API服务（新增150+行）
+- `frontend/src/pages/TaskHall.tsx` - 任务大厅页面（210行）
+- `frontend/src/pages/MyTasks.tsx` - 我的任务页面（360行）
+- `frontend/src/pages/CreateCampaign.tsx` - 创建活动页面（310行）
+
+#### Git提交：
+- 提交哈希: `6b7dce6`, `080fe68`
+- 13个文件修改，2500+行代码
+- 推送到 GitHub: `superxia01/pr-business`
+
+#### 构建结果：
+- 后端编译成功（24MB）
+- 前端构建成功（349KB）
+
+#### 注意事项：
+- 创建活动时会预创建N个任务名额，避免并发问题
+- 接任务时会检查用户是否已经接了该活动的其他任务
+- 审核拒绝的任务可以重新提交
+- 积分流水记录了完整的余额变化，便于对账
+
+#### 下一步：
+- 阶段6-7：积分系统和提现功能
+
+---
+
+### 2026-02-02 (续6)
+
+**阶段6-7：积分系统和提现功能** ✅ 已完成
+
+#### 完成内容：
+1. ✅ 积分管理前端页面
+   - `frontend/src/pages/Recharge.tsx` - 充值页面（220+行）
+   - `frontend/src/pages/CreditTransactions.tsx` - 积分流水页面（190+行）
+   - 预设金额快捷选择
+   - 支付方式选择（支付宝、微信、银行转账）
+   - 流水类型筛选和分页
+
+2. ✅ 提现功能后端
+   - `backend/models/withdrawal.go` - 提现模型（100行）
+   - `backend/controllers/withdrawal.go` - 提现控制器（500+行）
+   - 申请提现（冻结积分）
+   - 获取提现记录列表（分页+状态筛选）
+   - 审核提现（通过/拒绝，解冻积分）
+   - 确认打款（扣除冻结余额）
+   - 账户信息哈希去重
+
+3. ✅ 提现功能前端页面
+   - `frontend/src/pages/Withdrawal.tsx` - 申请提现页面（320+行）
+   - `frontend/src/pages/Withdrawals.tsx` - 提现记录页面（210+行）
+   - `frontend/src/pages/WithdrawalReview.tsx` - 提现审核页面（300+行）
+   - 支持支付宝、微信、银行转账三种方式
+   - 动态表单（根据提现方式显示不同字段）
+   - 超管审核页面（通过/拒绝/确认打款）
+
+4. ✅ 类型定义和API服务
+   - `frontend/src/types/index.ts` - 添加提现类型（40行）
+   - `frontend/src/services/api.ts` - 添加withdrawalApi（40行）
+   - Withdrawal、CreateWithdrawalRequest、AuditWithdrawalRequest 等
+
+5. ✅ 路由和导航更新
+   - `frontend/src/App.tsx` - 添加 3个新路由
+   - `frontend/src/pages/Dashboard.tsx` - 添加导航链接（提现记录、提现审核）
+
+#### 提现流程：
+1. 用户申请提现 → 冻结积分（balance → frozen_balance）
+2. 超管审核通过 → 状态变更为approved
+3. 超管确认打款 → 扣除冻结余额，状态变更为completed
+4. 超管审核拒绝 → 解冻积分（frozen_balance → balance），状态变更为rejected
+
+#### 功能特性：
+- 提现申请时自动冻结积分
+- 支持多种提现方式（支付宝、微信、银行转账）
+- 账户信息哈希去重，防止重复提交
+- 超管审核界面支持批量操作
+- 完整的状态流转：pending → approved/rejected → completed
+- 提现记录支持状态筛选和分页
+
+#### 输出文件：
+- `backend/models/withdrawal.go` - 提现模型（100行）
+- `backend/controllers/withdrawal.go` - 提现控制器（500+行）
+- `frontend/src/pages/Recharge.tsx` - 充值页面（224行）
+- `frontend/src/pages/CreditTransactions.tsx` - 积分流水页面（191行）
+- `frontend/src/pages/Withdrawal.tsx` - 申请提现页面（324行）
+- `frontend/src/pages/Withdrawals.tsx` - 提现记录页面（211行）
+- `frontend/src/pages/WithdrawalReview.tsx` - 提现审核页面（303行）
+
+#### Git提交：
+- 提交哈希: `7ec51f7`
+- 13个文件修改，1972行代码
+- 推送到 GitHub: `superxia01/pr-business`
+
+#### 构建结果：
+- 后端编译成功（24MB）
+- 前端构建成功（375KB）
+
+#### 注意事项：
+- 提现申请时会检查余额是否足够
+- 提现会冻结积分，审核通过后才会扣除
+- 审核拒绝会自动解冻积分
+- 打款操作目前是模拟的，实际环境需要对接第三方支付
+
+#### 下一步：
+- 阶段8：前端完善与联调（响应式布局、错误处理、API联调）
 
 ---
 
