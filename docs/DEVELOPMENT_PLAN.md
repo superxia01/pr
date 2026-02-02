@@ -17,8 +17,8 @@
 
 ## 📊 当前进度
 
-**当前阶段**: 阶段2 - 认证系统
-**进度**: 100% (5/5) ✅
+**当前阶段**: 阶段3 - 邀请码系统
+**进度**: 100% (3/3) ✅
 **完成时间**: 2026-02-02
 
 ---
@@ -105,12 +105,47 @@
 
 ---
 
+### 阶段3：邀请码系统 ✅
+
+- [x] 3.1 邀请码生成
+  - [x] 固定邀请码生成算法 - `backend/utils/invitation_code.go`
+  - [x] InvitationCode模型 - `backend/models/invitation_code.go`
+  - [x] 邀请码唯一性校验
+  - [x] 基于ID后缀的编码规则
+
+- [x] 3.2 邀请码接口
+  - [x] 创建邀请码接口 - `backend/controllers/invitation.go`
+  - [x] 邀请码列表接口
+  - [x] 邀请码详情接口
+  - [x] 使用邀请码接口
+  - [x] 禁用邀请码接口
+
+- [x] 3.3 邀请码管理页面
+  - [x] 邀请码列表页面 - `frontend/src/pages/InvitationCodes.tsx`
+  - [x] 创建邀请码模态框
+  - [x] 邀请码状态显示
+  - [x] 禁用邀请码功能
+
+**邀请码规则**:
+- `ADMIN-MASTER`: 超级管理员主邀请码（固定）
+- `SP-{id后8位}`: 服务商管理员邀请码
+- `MERCHANT-{provider_id后8位}-{id后8位}`: 商家邀请码
+- `CREATOR-{id后8位}`: 达人邀请码
+- `STAFF-{owner_id后8位}-{type}`: 员工邀请码
+
+**交付物**:
+- ✅ `backend/models/invitation_code.go` - 邀请码模型
+- ✅ `backend/utils/invitation_code.go` - 邀请码生成工具
+- ✅ `backend/controllers/invitation.go` - 邀请码控制器
+- ✅ `frontend/src/pages/InvitationCodes.tsx` - 邀请码管理页面（400+行）
+- ✅ 后端编译成功
+- ✅ 前端构建成功（283KB）
+
+---
+
 ## 🚧 进行中任务
 
-**阶段3：邀请码系统** - 准备开始
-- 邀请码生成算法
-- 邀请码验证接口
-- 邀请码管理页面
+*暂无 - 所有已完成阶段都已归档*
 
 ---
 
@@ -539,6 +574,79 @@ pr-business/
 
 #### 下一步：
 - 阶段3：邀请码系统（后端接口+前端页面）
+
+---
+
+### 2026-02-02 (续3)
+
+**阶段3：邀请码系统** ✅ 已完成
+
+#### 完成内容：
+1. ✅ 邀请码模型和生成逻辑
+   - `backend/models/invitation_code.go` - 邀请码数据模型
+   - `backend/utils/invitation_code.go` - 邀请码生成工具
+   - 实现基于ID后缀的固定邀请码生成算法
+   - 邀请码格式验证和解析功能
+
+2. ✅ 邀请码控制器
+   - `backend/controllers/invitation.go` - 邀请码CRUD接口
+   - 创建邀请码（权限控制）
+   - 获取邀请码列表（支持过滤）
+   - 获取邀请码详情
+   - 使用邀请码（检查状态、使用次数、过期时间）
+   - 禁用邀请码
+
+3. ✅ API路由配置
+   - POST /api/v1/invitations - 创建邀请码
+   - GET /api/v1/invitations - 邀请码列表
+   - GET /api/v1/invitations/:code - 邀请码详情
+   - POST /api/v1/invitations/use - 使用邀请码
+   - POST /api/v1/invitations/:code/disable - 禁用邀请码
+
+4. ✅ 前端邀请码管理
+   - `frontend/src/pages/InvitationCodes.tsx` - 邀请码管理页面（400+行）
+   - 邀请码列表展示（表格形式）
+   - 创建邀请码模态框
+   - 邀请码状态标签（active/disabled/expired/used）
+   - 禁用邀请码功能
+   - 权限控制（超级管理员、服务商管理员、商家管理员）
+
+5. ✅ 类型定义和API服务
+   - `frontend/src/types/index.ts` - 邀请码类型定义
+   - `frontend/src/services/api.ts` - 邀请码API服务
+   - Dashboard页面添加邀请码管理入口
+
+#### 邀请码编码规则：
+- **超级管理员**: `ADMIN-MASTER`（固定）
+- **服务商管理员**: `SP-{id后8位}`
+- **商家**: `MERCHANT-{provider_id后8位}-{id后8位}`
+- **达人**: `CREATOR-{id后8位}`
+- **员工**: `STAFF-{owner_id后8位}-{type}`
+
+#### 权限控制：
+- 超级管理员：可创建所有类型邀请码
+- 服务商管理员：可创建商家、达人、员工邀请码
+- 商家管理员：可创建员工邀请码
+
+#### 输出文件：
+- `backend/models/invitation_code.go` - 邀请码模型（100行）
+- `backend/utils/invitation_code.go` - 生成工具（80行）
+- `backend/controllers/invitation.go` - 控制器（300+行）
+- `frontend/src/pages/InvitationCodes.tsx` - 管理页面（400+行）
+
+#### Git提交：
+- 提交哈希: `545a499`
+- 10个文件修改，935行代码
+- 推送到 GitHub: `superxia01/pr-business`
+
+#### 注意事项：
+- 邀请码生成基于ID后8位，确保唯一性
+- 使用邀请码会检查：状态、使用次数、过期时间、是否已使用
+- 权限检查在后端和前端都实现了
+- 邀请码使用后会增加使用计数，达到maxUses后状态变为used
+
+#### 下一步：
+- 阶段4：用户管理（商家、服务商、达人管理）
 
 ---
 
