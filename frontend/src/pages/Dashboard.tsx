@@ -24,6 +24,10 @@ export default function Dashboard() {
     return user?.roles.includes('CREATOR')
   }
 
+  const isMerchantStaff = () => {
+    return user?.roles.includes('MERCHANT_STAFF')
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
@@ -73,6 +77,30 @@ export default function Dashboard() {
                 >
                   达人中心
                 </a>
+              )}
+              {(isMerchantAdmin() || isMerchantStaff()) && (
+                <a
+                  href="/create-campaign"
+                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  创建活动
+                </a>
+              )}
+              {isCreator() && (
+                <>
+                  <a
+                    href="/task-hall"
+                    className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    任务大厅
+                  </a>
+                  <a
+                    href="/my-tasks"
+                    className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                  >
+                    我的任务
+                  </a>
+                </>
               )}
               <span className="text-sm text-gray-700">
                 欢迎，{user?.nickname || '用户'}
@@ -166,6 +194,36 @@ export default function Dashboard() {
                       达人个人中心 →
                     </a>
                   </div>
+                )}
+                {(isMerchantAdmin() || isMerchantStaff()) && (
+                  <div>
+                    <a
+                      href="/create-campaign"
+                      className="text-yellow-700 hover:text-yellow-800 underline"
+                    >
+                      创建营销活动 →
+                    </a>
+                  </div>
+                )}
+                {isCreator() && (
+                  <>
+                    <div>
+                      <a
+                        href="/task-hall"
+                        className="text-yellow-700 hover:text-yellow-800 underline"
+                      >
+                        任务大厅 →
+                      </a>
+                    </div>
+                    <div>
+                      <a
+                        href="/my-tasks"
+                        className="text-yellow-700 hover:text-yellow-800 underline"
+                      >
+                        我的任务 →
+                      </a>
+                    </div>
+                  </>
                 )}
               </div>
             </div>

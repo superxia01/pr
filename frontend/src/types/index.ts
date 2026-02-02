@@ -257,3 +257,147 @@ export interface CreatorLevelStats {
   level: string
   count: number
 }
+
+// 营销活动类型
+export interface Campaign {
+  id: string
+  merchantId: string
+  providerId: string | null
+  title: string
+  requirements: string
+  platforms: string // JSONB string
+  taskAmount: number
+  campaignAmount: number
+  creatorAmount: number | null
+  staffReferralAmount: number | null
+  providerAmount: number | null
+  quota: number
+  taskDeadline: string
+  submissionDeadline: string
+  status: 'DRAFT' | 'OPEN' | 'CLOSED'
+  createdAt: string
+  updatedAt: string
+  deletedAt: string | null
+  merchant?: Merchant
+  provider?: ServiceProvider
+  tasks?: Task[]
+}
+
+export interface CreateCampaignRequest {
+  title: string
+  requirements: string
+  platforms: string
+  taskAmount: number
+  campaignAmount: number
+  creatorAmount?: number
+  staffReferralAmount?: number
+  providerAmount?: number
+  quota: number
+  taskDeadline: string
+  submissionDeadline: string
+}
+
+export interface UpdateCampaignRequest {
+  title?: string
+  requirements?: string
+  platforms?: string
+  taskAmount?: number
+  campaignAmount?: number
+  creatorAmount?: number
+  staffReferralAmount?: number
+  providerAmount?: number
+  quota?: number
+  taskDeadline?: string
+  submissionDeadline?: string
+  status?: 'DRAFT' | 'OPEN' | 'CLOSED'
+}
+
+// 任务类型
+export interface Task {
+  id: string
+  campaignId: string
+  taskSlotNumber: number
+  status: 'OPEN' | 'ASSIGNED' | 'SUBMITTED' | 'APPROVED' | 'REJECTED'
+  creatorId: string | null
+  assignedAt: string | null
+  platform: string
+  platformUrl: string
+  screenshots: string // JSONB string
+  submittedAt: string | null
+  notes: string
+  auditedBy: string | null
+  auditedAt: string | null
+  auditNote: string
+  inviterId: string | null
+  inviterType: string
+  priority: 'HIGH' | 'MEDIUM' | 'LOW'
+  tags: string[]
+  version: number
+  createdAt: string
+  updatedAt: string
+  campaign?: Campaign
+  creator?: Creator
+  auditor?: User
+  inviter?: User
+}
+
+export interface AcceptTaskRequest {
+  platform: string
+}
+
+export interface SubmitTaskRequest {
+  platformUrl: string
+  screenshots?: string
+  notes?: string
+}
+
+export interface AuditTaskRequest {
+  action: 'approve' | 'reject'
+  auditNote?: string
+}
+
+export interface TasksResponse {
+  data: Task[]
+  total: number
+  page: number
+  page_size: number
+}
+
+// 积分账户类型
+export interface CreditAccount {
+  id: string
+  ownerId: string
+  ownerType: 'ORG_MERCHANT' | 'ORG_PROVIDER' | 'USER_PERSONAL'
+  balance: number
+  frozenBalance: number
+  createdAt: string
+  updatedAt: string
+}
+
+// 积分流水类型
+export interface CreditTransaction {
+  id: string
+  accountId: string
+  type: string
+  amount: number
+  balanceBefore: number
+  balanceAfter: number
+  transactionGroupId: string | null
+  groupSequence: number | null
+  relatedCampaignId: string | null
+  relatedTaskId: string | null
+  description: string
+  createdAt: string
+}
+
+export interface TransactionsResponse {
+  data: CreditTransaction[]
+  total: number
+  page: number
+  page_size: number
+}
+
+export interface RechargeRequest {
+  amount: number
+}
+

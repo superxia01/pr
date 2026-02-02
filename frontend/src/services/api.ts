@@ -25,6 +25,17 @@ import type {
   UpdateCreatorRequest,
   CreatorsResponse,
   CreatorLevelStats,
+  Campaign,
+  CreateCampaignRequest,
+  UpdateCampaignRequest,
+  Task,
+  AcceptTaskRequest,
+  SubmitTaskRequest,
+  AuditTaskRequest,
+  TasksResponse,
+  CreditAccount,
+  TransactionsResponse,
+  RechargeRequest,
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
@@ -377,6 +388,124 @@ export const creatorApi = {
   // 更新当前用户的达人资料
   updateMyCreatorProfile: async (data: UpdateCreatorRequest) => {
     const response = await api.put<Creator>('/api/v1/creator/me', data)
+    return response.data
+  },
+}
+
+// 营销活动API
+export const campaignApi = {
+  // 创建营销活动
+  createCampaign: async (data: CreateCampaignRequest) => {
+    const response = await api.post<Campaign>('/api/v1/campaigns', data)
+    return response.data
+  },
+
+  // 获取营销活动列表
+  getCampaigns: async (params?: { status?: string; merchant_id?: string }) => {
+    const response = await api.get<Campaign[]>('/api/v1/campaigns', { params })
+    return response.data
+  },
+
+  // 获取我的营销活动
+  getMyCampaigns: async () => {
+    const response = await api.get<Campaign[]>('/api/v1/campaigns/my')
+    return response.data
+  },
+
+  // 获取营销活动详情
+  getCampaign: async (id: string) => {
+    const response = await api.get<Campaign>(`/api/v1/campaigns/${id}`)
+    return response.data
+  },
+
+  // 更新营销活动
+  updateCampaign: async (id: string, data: UpdateCampaignRequest) => {
+    const response = await api.put<Campaign>(`/api/v1/campaigns/${id}`, data)
+    return response.data
+  },
+
+  // 删除营销活动
+  deleteCampaign: async (id: string) => {
+    const response = await api.delete<{ message: string }>(`/api/v1/campaigns/${id}`)
+    return response.data
+  },
+}
+
+// 任务API
+export const taskApi = {
+  // 获取任务列表
+  getTasks: async (params?: {
+    campaign_id?: string
+    status?: string
+    creator_id?: string
+  }) => {
+    const response = await api.get<Task[]>('/api/v1/tasks', { params })
+    return response.data
+  },
+
+  // 获取任务大厅
+  getTaskHall: async (params?: { page?: number; page_size?: number }) => {
+    const response = await api.get<TasksResponse>('/api/v1/tasks/hall', { params })
+    return response.data
+  },
+
+  // 获取我的任务
+  getMyTasks: async (params?: { status?: string }) => {
+    const response = await api.get<Task[]>('/api/v1/tasks/my', { params })
+    return response.data
+  },
+
+  // 获取待审核任务
+  getPendingReviewTasks: async () => {
+    const response = await api.get<Task[]>('/api/v1/tasks/pending-review')
+    return response.data
+  },
+
+  // 获取任务详情
+  getTask: async (id: string) => {
+    const response = await api.get<Task>(`/api/v1/tasks/${id}`)
+    return response.data
+  },
+
+  // 接任务
+  acceptTask: async (id: string, data: AcceptTaskRequest) => {
+    const response = await api.post<Task>(`/api/v1/tasks/${id}/accept`, data)
+    return response.data
+  },
+
+  // 提交任务
+  submitTask: async (id: string, data: SubmitTaskRequest) => {
+    const response = await api.post<Task>(`/api/v1/tasks/${id}/submit`, data)
+    return response.data
+  },
+
+  // 审核任务
+  auditTask: async (id: string, data: AuditTaskRequest) => {
+    const response = await api.post<Task>(`/api/v1/tasks/${id}/audit`, data)
+    return response.data
+  },
+}
+
+// 积分API
+export const creditApi = {
+  // 获取积分余额
+  getBalance: async () => {
+    const response = await api.get<CreditAccount>('/api/v1/credit/balance')
+    return response.data
+  },
+
+  // 获取积分流水
+  getTransactions: async (params?: { page?: number; page_size?: number }) => {
+    const response = await api.get<TransactionsResponse>('/api/v1/credit/transactions', { params })
+    return response.data
+  },
+
+  // 充值
+  recharge: async (data: RechargeRequest) => {
+    const response = await api.post<{ message: string; account: CreditAccount }>(
+      '/api/v1/credit/recharge',
+      data
+    )
     return response.data
   },
 }

@@ -8,6 +8,9 @@ import UserManagement from './pages/UserManagement'
 import MerchantInfo from './pages/MerchantInfo'
 import ServiceProviderInfo from './pages/ServiceProviderInfo'
 import CreatorProfile from './pages/CreatorProfile'
+import TaskHall from './pages/TaskHall'
+import MyTasks from './pages/MyTasks'
+import CreateCampaign from './pages/CreateCampaign'
 
 function App() {
   return (
@@ -60,6 +63,30 @@ function App() {
             element={
               <ProtectedRoute>
                 <CreatorProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/task-hall"
+            element={
+              <ProtectedRoute>
+                <TaskHall />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/my-tasks"
+            element={
+              <ProtectedRoute>
+                <MyTasks />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/create-campaign"
+            element={
+              <ProtectedRoute>
+                <CreateCampaign />
               </ProtectedRoute>
             }
           />
