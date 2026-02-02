@@ -2,6 +2,19 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { invitationApi } from '../services/api'
 import type { InvitationCode } from '../types'
+import { DataTable } from '../components/ui/data-table'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Badge } from '../components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '../components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 
 export default function InvitationCodes() {
   const { user } = useAuth()
@@ -67,21 +80,6 @@ export default function InvitationCodes() {
     }
   }
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'active':
-        return 'bg-green-100 text-green-800'
-      case 'disabled':
-        return 'bg-gray-100 text-gray-800'
-      case 'expired':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'used':
-        return 'bg-blue-100 text-blue-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
-    }
-  }
-
   const getCodeTypeLabel = (codeType: string) => {
     const labels: Record<string, string> = {
       'ADMIN_MASTER': '超级管理员',
@@ -98,17 +96,93 @@ export default function InvitationCodes() {
     return role === 'super_admin' || role === 'service_provider_admin' || role === 'merchant_admin'
   }
 
+  // DataTable列定义
+  const columns = [
+    {
+      id: 'code',
+      header: '邀请码',
+      accessorKey: 'code' as const,
+      sortable: true,
+      cell: ({ value }: { value: string }) => (
+        <span className="font-mono text-sm font-medium">{value}</span>
+      ),
+    },
+    {
+      id: 'codeType',
+      header: '类型',
+      accessorKey: 'codeType' as const,
+      sortable: true,
+      filterable: true,
+      cell: ({ value }: { value: string }) => (
+        <Badge variant="outline">{getCodeTypeLabel(value)}</Badge>
+      ),
+    },
+    {
+      id: 'status',
+      header: '状态',
+      accessorKey: 'status' as const,
+      sortable: true,
+      filterable: true,
+      cell: ({ value }: { value: string }) => {
+        const variant = value === 'active' ? 'default' :
+                        value === 'disabled' ? 'secondary' :
+                        value === 'expired' ? 'destructive' : 'outline'
+        const label = value === 'active' ? '有效' :
+                     value === 'disabled' ? '已禁用' :
+                     value === 'expired' ? '已过期' : '已用完'
+        return <Badge variant={variant}>{label}</Badge>
+      },
+    },
+    {
+      id: 'useCount',
+      header: '使用情况',
+      accessorKey: 'useCount' as const,
+      cell: ({ row }: { row: InvitationCode }) => (
+        <span className="text-sm text-muted-foreground">
+          {row.useCount}/{row.maxUses === 0 ? '无限' : row.maxUses}
+        </span>
+      ),
+    },
+    {
+      id: 'createdAt',
+      header: '创建时间',
+      accessorKey: 'createdAt' as const,
+      sortable: true,
+      cell: ({ value }: { value: string }) => (
+        <span className="text-sm text-muted-foreground">
+          {new Date(value).toLocaleDateString('zh-CN')}
+        </span>
+      ),
+    },
+    {
+      id: 'actions',
+      header: '操作',
+      cell: ({ row }: { row: InvitationCode }) => (
+        row.status === 'active' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => handleDisableCode(row.code)}
+            className="text-destructive hover:text-destructive"
+          >
+            禁用
+          </Button>
+        )
+      ),
+    },
+  ]
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* 顶部导航 */}
-      <nav className="bg-white shadow-sm border-b border-gray-200">
+      <nav className="bg-card shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">PR Business</h1>
+              <h1 className="text-xl font-bold">PR Business</h1>
             </div>
             <div className="flex items-center gap-4">
-              <a href="/dashboard" className="text-sm text-gray-700 hover:text-gray-900">
+              <a href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
                 返回工作台
               </a>
             </div>
@@ -119,183 +193,104 @@ export default function InvitationCodes() {
       {/* 主要内容 */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">邀请码管理</h2>
-          <p className="text-gray-600 mt-1">查看和管理您的邀请码</p>
+          <h2 className="text-2xl font-bold">邀请码管理</h2>
+          <p className="text-muted-foreground mt-1">查看和管理您的邀请码</p>
         </div>
 
         {/* 错误提示 */}
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600">
-            {error}
+          <div className="mb-4">
+            <Badge variant="destructive" className="w-full py-2 px-3 justify-center">
+              {error}
+            </Badge>
           </div>
         )}
 
         {/* 操作栏 */}
         <div className="mb-6 flex justify-between items-center">
-          <div className="text-sm text-gray-700">
+          <div className="text-sm text-muted-foreground">
             共 <span className="font-medium">{codes.length}</span> 个邀请码
           </div>
           {canCreateCode() && (
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
+            <Button onClick={() => setShowCreateModal(true)}>
               创建邀请码
-            </button>
+            </Button>
           )}
         </div>
 
         {/* 邀请码列表 */}
         {loading ? (
           <div className="text-center py-12">
-            <div className="text-gray-500">加载中...</div>
-          </div>
-        ) : codes.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg">
-            <p className="text-gray-500">暂无邀请码</p>
+            <div className="text-muted-foreground">加载中...</div>
           </div>
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    邀请码
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    类型
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    状态
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    使用情况
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    创建时间
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    操作
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {codes.map((code) => (
-                  <tr key={code.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900 font-mono">
-                        {code.code}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {getCodeTypeLabel(code.codeType)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadgeClass(code.status)}`}>
-                        {code.status === 'active' ? '有效' :
-                         code.status === 'disabled' ? '已禁用' :
-                         code.status === 'expired' ? '已过期' : '已用完'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {code.useCount}/{code.maxUses === 0 ? '无限' : code.maxUses}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(code.createdAt).toLocaleDateString('zh-CN')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      {code.status === 'active' && (
-                        <button
-                          onClick={() => handleDisableCode(code.code)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          禁用
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            data={codes}
+            columns={columns}
+            searchable
+            pageSize={10}
+            emptyMessage="暂无邀请码"
+          />
         )}
       </main>
 
-      {/* 创建邀请码模态框 */}
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">创建邀请码</h3>
+      {/* 创建邀请码Dialog */}
+      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>创建邀请码</DialogTitle>
+          </DialogHeader>
 
-            <form onSubmit={handleCreateCode} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  邀请码类型
-                </label>
-                <select
-                  value={createForm.codeType}
-                  onChange={(e) => setCreateForm({ ...createForm, codeType: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                >
-                  <option value="MERCHANT">商家</option>
-                  <option value="CREATOR">达人</option>
-                  <option value="STAFF">员工</option>
+          <form onSubmit={handleCreateCode} className="space-y-4">
+            <div className="space-y-2">
+              <Label>邀请码类型</Label>
+              <Select
+                value={createForm.codeType}
+                onValueChange={(value) => setCreateForm({ ...createForm, codeType: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="MERCHANT">商家</SelectItem>
+                  <SelectItem value="CREATOR">达人</SelectItem>
+                  <SelectItem value="STAFF">员工</SelectItem>
                   {user?.currentRole === 'super_admin' && (
-                    <>
-                      <option value="SP_ADMIN">服务商管理员</option>
-                    </>
+                    <SelectItem value="SP_ADMIN">服务商管理员</SelectItem>
                   )}
-                </select>
-              </div>
+                </SelectContent>
+              </Select>
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  最大使用次数
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={createForm.maxUses}
-                  onChange={(e) => setCreateForm({ ...createForm, maxUses: parseInt(e.target.value) })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  required
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>最大使用次数</Label>
+              <Input
+                type="number"
+                min="1"
+                value={createForm.maxUses}
+                onChange={(e) => setCreateForm({ ...createForm, maxUses: parseInt(e.target.value) })}
+                required
+              />
+            </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  过期时间（可选）
-                </label>
-                <input
-                  type="datetime-local"
-                  value={createForm.expiresAt}
-                  onChange={(e) => setCreateForm({ ...createForm, expiresAt: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>过期时间（可选）</Label>
+              <Input
+                type="datetime-local"
+                value={createForm.expiresAt}
+                onChange={(e) => setCreateForm({ ...createForm, expiresAt: e.target.value })}
+              />
+            </div>
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  创建
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                >
-                  取消
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+            <DialogFooter>
+              <Button type="submit">创建</Button>
+              <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
+                取消
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

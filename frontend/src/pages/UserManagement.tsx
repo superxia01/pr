@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { merchantApi, serviceProviderApi, creatorApi } from '../services/api'
 import type { Merchant, ServiceProvider, Creator } from '../types'
+import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
 
 export default function UserManagement() {
   const [activeTab, setActiveTab] = useState<'merchants' | 'providers' | 'creators'>('merchants')
@@ -123,67 +125,68 @@ export default function UserManagement() {
             {/* 商家列表 */}
             {!loading && activeTab === 'merchants' && (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        名称
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        管理员
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        服务商
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        状态
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        操作
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {merchants.map((merchant) => (
-                      <tr key={merchant.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{merchant.name}</div>
-                          {merchant.description && (
-                            <div className="text-sm text-gray-500 truncate max-w-xs">{merchant.description}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {merchant.admin?.nickname || merchant.adminId}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {merchant.provider?.name || merchant.providerId}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            merchant.status === 'active' ? 'bg-green-100 text-green-800' :
-                            merchant.status === 'suspended' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {merchant.status === 'active' ? '正常' :
-                             merchant.status === 'suspended' ? '暂停' :
-                             merchant.status === 'inactive' ? '未激活' : merchant.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button className="text-blue-600 hover:text-blue-900 mr-3">编辑</button>
-                          <button
-                            onClick={() => handleDeleteMerchant(merchant.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            删除
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {merchants.length === 0 && (
-                  <div className="text-center py-12 text-gray-500">暂无商家数据</div>
+                {merchants.length > 0 ? (
+                  <div className="bg-white shadow rounded-lg overflow-hidden">
+                    <div className="p-4 border-b border-gray-200">
+                      <h3 className="text-lg font-medium text-gray-900">商家列表</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              名称
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              管理员
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              服务商
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              状态
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              操作
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {merchants.map((merchant) => (
+                            <tr key={merchant.id}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{merchant.name}</div>
+                                {merchant.description && (
+                                  <div className="text-sm text-gray-500 truncate max-w-xs">{merchant.description}</div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {merchant.admin?.nickname || merchant.adminId}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {merchant.provider?.name || merchant.providerId}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <Badge color={merchant.status === 'active' ? 'success' : merchant.status === 'suspended' ? 'danger' : 'gray'}>
+                                  {merchant.status === 'active' ? '正常' :
+                                   merchant.status === 'suspended' ? '暂停' :
+                                   merchant.status === 'inactive' ? '未激活' : merchant.status}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                                <Button color="blue" size="sm">编辑</Button>
+                                <Button color="red" size="sm" onClick={() => handleDeleteMerchant(merchant.id)}>
+                                  删除
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-500 bg-white rounded-lg shadow">暂无商家数据</div>
                 )}
               </div>
             )}
@@ -191,67 +194,68 @@ export default function UserManagement() {
             {/* 服务商列表 */}
             {!loading && activeTab === 'providers' && (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        名称
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        管理员
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        商家数量
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        状态
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        操作
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {providers.map((provider) => (
-                      <tr key={provider.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">{provider.name}</div>
-                          {provider.description && (
-                            <div className="text-sm text-gray-500 truncate max-w-xs">{provider.description}</div>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {provider.admin?.nickname || provider.adminId}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {provider.merchants?.length || 0}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            provider.status === 'active' ? 'bg-green-100 text-green-800' :
-                            provider.status === 'suspended' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {provider.status === 'active' ? '正常' :
-                             provider.status === 'suspended' ? '暂停' :
-                             provider.status === 'inactive' ? '未激活' : provider.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button className="text-blue-600 hover:text-blue-900 mr-3">编辑</button>
-                          <button
-                            onClick={() => handleDeleteProvider(provider.id)}
-                            className="text-red-600 hover:text-red-900"
-                          >
-                            删除
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {providers.length === 0 && (
-                  <div className="text-center py-12 text-gray-500">暂无服务商数据</div>
+                {providers.length > 0 ? (
+                  <div className="bg-white shadow rounded-lg overflow-hidden">
+                    <div className="p-4 border-b border-gray-200">
+                      <h3 className="text-lg font-medium text-gray-900">服务商列表</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              名称
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              管理员
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              商家数量
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              状态
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              操作
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {providers.map((provider) => (
+                            <tr key={provider.id}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">{provider.name}</div>
+                                {provider.description && (
+                                  <div className="text-sm text-gray-500 truncate max-w-xs">{provider.description}</div>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {provider.admin?.nickname || provider.adminId}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {provider.merchants?.length || 0}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <Badge color={provider.status === 'active' ? 'success' : provider.status === 'suspended' ? 'danger' : 'gray'}>
+                                  {provider.status === 'active' ? '正常' :
+                                   provider.status === 'suspended' ? '暂停' :
+                                   provider.status === 'inactive' ? '未激活' : provider.status}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                                <Button color="blue" size="sm">编辑</Button>
+                                <Button color="red" size="sm" onClick={() => handleDeleteProvider(provider.id)}>
+                                  删除
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-500 bg-white rounded-lg shadow">暂无服务商数据</div>
                 )}
               </div>
             )}
@@ -259,73 +263,72 @@ export default function UserManagement() {
             {/* 达人列表 */}
             {!loading && activeTab === 'creators' && (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        昵称
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        等级
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        粉丝数
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        邀请人
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        状态
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        操作
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {creators.map((creator) => (
-                      <tr key={creator.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {creator.user?.nickname || creator.wechatNickname}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            creator.level === 'KOL' ? 'bg-purple-100 text-purple-800' :
-                            creator.level === 'INF' ? 'bg-blue-100 text-blue-800' :
-                            creator.level === 'KOC' ? 'bg-green-100 text-green-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {creator.level}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {creator.followersCount.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {creator.inviter?.nickname || creator.inviterId || '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            creator.status === 'active' ? 'bg-green-100 text-green-800' :
-                            creator.status === 'banned' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                            {creator.status === 'active' ? '正常' :
-                             creator.status === 'banned' ? '封禁' :
-                             creator.status === 'inactive' ? '未激活' : creator.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          <button className="text-blue-600 hover:text-blue-900">查看</button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {creators.length === 0 && (
-                  <div className="text-center py-12 text-gray-500">暂无达人数据</div>
+                {creators.length > 0 ? (
+                  <div className="bg-white shadow rounded-lg overflow-hidden">
+                    <div className="p-4 border-b border-gray-200">
+                      <h3 className="text-lg font-medium text-gray-900">达人列表</h3>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              昵称
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              等级
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              粉丝数
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              邀请人
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              状态
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              操作
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {creators.map((creator) => (
+                            <tr key={creator.id}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {creator.user?.nickname || creator.wechatNickname}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                <Badge color={creator.level === 'KOL' ? 'purple' : creator.level === 'INF' ? 'blue' : creator.level === 'KOC' ? 'green' : 'gray'}>
+                                  {creator.level}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {creator.followersCount.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {creator.inviter?.nickname || creator.inviterId || '-'}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <Badge color={creator.status === 'active' ? 'success' : creator.status === 'banned' ? 'danger' : 'gray'}>
+                                  {creator.status === 'active' ? '正常' :
+                                   creator.status === 'banned' ? '封禁' :
+                                   creator.status === 'inactive' ? '未激活' : creator.status}
+                                </Badge>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                <Button color="blue" size="sm">查看</Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12 text-gray-500 bg-white rounded-lg shadow">暂无达人数据</div>
                 )}
               </div>
             )}

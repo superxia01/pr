@@ -1,4 +1,11 @@
 import { useEffect, useState } from 'react'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { DataTable } from '../components/ui/data-table'
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog'
+import { Badge } from '../components/ui/badge'
 import { merchantApi } from '../services/api'
 import type { Merchant, MerchantStaff } from '../types'
 
@@ -99,156 +106,159 @@ export default function MerchantInfo() {
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="bg-white rounded-lg shadow">
+        <Card>
           {/* 标题 */}
-          <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
+          <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">商家信息</h1>
-              <p className="mt-1 text-sm text-gray-500">管理您的商家信息和员工</p>
+              <CardTitle className="text-2xl">商家信息</CardTitle>
+              <CardDescription className="mt-1">管理您的商家信息和员工</CardDescription>
             </div>
             {!editMode && (
-              <button
-                onClick={() => setEditMode(true)}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
+              <Button onClick={() => setEditMode(true)}>
                 编辑信息
-              </button>
+              </Button>
             )}
-          </div>
+          </CardHeader>
 
-          <div className="p-6">
+          <CardContent>
             {/* 商家基本信息 */}
-            <div className="mb-8">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">基本信息</h2>
-              {editMode ? (
-                <EditMerchantForm
-                  merchant={merchant}
-                  onSave={handleUpdateMerchant}
-                  onCancel={() => setEditMode(false)}
-                />
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">商家名称</label>
-                    <p className="mt-1 text-sm text-gray-900">{merchant.name}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">所属服务商</label>
-                    <p className="mt-1 text-sm text-gray-900">{merchant.provider?.name || merchant.providerId}</p>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700">商家描述</label>
-                    <p className="mt-1 text-sm text-gray-900">{merchant.description || '-'}</p>
-                  </div>
-                  {merchant.industry && (
+            <Card className="mb-8">
+              <CardHeader>
+                <CardTitle className="text-lg">基本信息</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {editMode ? (
+                  <EditMerchantForm
+                    merchant={merchant}
+                    onSave={handleUpdateMerchant}
+                    onCancel={() => setEditMode(false)}
+                  />
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">行业</label>
-                      <p className="mt-1 text-sm text-gray-900">{merchant.industry}</p>
+                      <Label className="text-sm font-medium">商家名称</Label>
+                      <p className="mt-1 text-sm text-gray-900">{merchant.name}</p>
                     </div>
-                  )}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">状态</label>
-                    <span className={`mt-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      merchant.status === 'active' ? 'bg-green-100 text-green-800' :
-                      merchant.status === 'suspended' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {merchant.status === 'active' ? '正常' :
-                       merchant.status === 'suspended' ? '暂停' :
-                       merchant.status === 'inactive' ? '未激活' : merchant.status}
-                    </span>
+                    <div>
+                      <Label className="text-sm font-medium">所属服务商</Label>
+                      <p className="mt-1 text-sm text-gray-900">{merchant.provider?.name || merchant.providerId}</p>
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label className="text-sm font-medium">商家描述</Label>
+                      <p className="mt-1 text-sm text-gray-900">{merchant.description || '-'}</p>
+                    </div>
+                    {merchant.industry && (
+                      <div>
+                        <Label className="text-sm font-medium">行业</Label>
+                        <p className="mt-1 text-sm text-gray-900">{merchant.industry}</p>
+                      </div>
+                    )}
+                    <div>
+                      <Label className="text-sm font-medium">状态</Label>
+                      <div className="mt-1">
+                        <Badge variant={
+                          merchant.status === 'active' ? 'default' :
+                          merchant.status === 'suspended' ? 'destructive' : 'secondary'
+                        }>
+                          {merchant.status === 'active' ? '正常' :
+                           merchant.status === 'suspended' ? '暂停' :
+                           merchant.status === 'inactive' ? '未激活' : merchant.status}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">创建时间</Label>
+                      <p className="mt-1 text-sm text-gray-500">{new Date(merchant.createdAt).toLocaleString()}</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">创建时间</label>
-                    <p className="mt-1 text-sm text-gray-500">{new Date(merchant.createdAt).toLocaleString()}</p>
-                  </div>
-                </div>
-              )}
-            </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* 员工管理 */}
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-medium text-gray-900">员工管理</h2>
-                <button
-                  onClick={() => setShowAddStaff(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-                >
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="text-lg">员工管理</CardTitle>
+                <Button onClick={() => setShowAddStaff(true)}>
                   添加员工
-                </button>
-              </div>
-
-              {staff.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 rounded-lg">
-                  <p className="text-gray-500">暂无员工</p>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          姓名
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          职位
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          权限数量
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          状态
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                          操作
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {staff.map((s) => (
-                        <tr key={s.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {s.user?.nickname || s.userId}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {s.title || '-'}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {s.permissions?.length || 0}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              s.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {s.status === 'active' ? '正常' : '未激活'}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button className="text-blue-600 hover:text-blue-900 mr-3">编辑权限</button>
-                            <button
-                              onClick={() => handleDeleteStaff(s.id)}
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {staff.length === 0 ? (
+                  <div className="text-center py-12 bg-gray-50 rounded-lg">
+                    <p className="text-gray-500">暂无员工</p>
+                  </div>
+                ) : (
+                  <DataTable
+                    data={staff}
+                    columns={[
+                      {
+                        id: 'name',
+                        header: '姓名',
+                        accessorKey: 'user',
+                        cell: ({ row }) => <span>{row.user?.nickname || row.userId}</span>
+                      },
+                      {
+                        id: 'title',
+                        header: '职位',
+                        accessorKey: 'title',
+                        cell: ({ value }) => <span>{value || '-'}</span>
+                      },
+                      {
+                        id: 'permissions',
+                        header: '权限数量',
+                        accessorKey: 'permissions',
+                        cell: ({ row }) => <span>{row.permissions?.length || 0}</span>
+                      },
+                      {
+                        id: 'status',
+                        header: '状态',
+                        accessorKey: 'status',
+                        cell: ({ row }) => (
+                          <Badge variant={row.status === 'active' ? 'default' : 'secondary'}>
+                            {row.status === 'active' ? '正常' : '未激活'}
+                          </Badge>
+                        )
+                      },
+                      {
+                        id: 'actions',
+                        header: '操作',
+                        cell: ({ row }) => (
+                          <div className="space-x-2">
+                            <Button variant="outline" size="sm" className="text-blue-600 hover:text-blue-900">
+                              编辑权限
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
                               className="text-red-600 hover:text-red-900"
+                              onClick={() => handleDeleteStaff(row.id)}
                             >
                               删除
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+                            </Button>
+                          </div>
+                        )
+                      }
+                    ]}
+                    emptyMessage="暂无员工"
+                  />
+                )}
+              </CardContent>
+            </Card>
 
             {/* 添加员工对话框 */}
-            {showAddStaff && (
-              <AddStaffModal
-                onSave={handleAddStaff}
-                onClose={() => setShowAddStaff(false)}
-              />
-            )}
-          </div>
-        </div>
+            <Dialog open={showAddStaff} onOpenChange={setShowAddStaff}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>添加员工</DialogTitle>
+                </DialogHeader>
+                <AddStaffForm
+                  onSave={handleAddStaff}
+                />
+              </DialogContent>
+            </Dialog>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
@@ -280,69 +290,61 @@ function EditMerchantForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">商家名称</label>
-          <input
+          <Label htmlFor="name">商家名称</Label>
+          <Input
+            id="name"
             type="text"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
             required
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700">行业</label>
-          <input
+          <Label htmlFor="industry">行业</Label>
+          <Input
+            id="industry"
             type="text"
             value={formData.industry}
             onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
           />
         </div>
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700">Logo URL</label>
-          <input
+          <Label htmlFor="logoUrl">Logo URL</Label>
+          <Input
+            id="logoUrl"
             type="url"
             value={formData.logoUrl}
             onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
           />
         </div>
         <div className="md:col-span-2">
-          <label className="block text-sm font-medium text-gray-700">商家描述</label>
+          <Label htmlFor="description">商家描述</Label>
           <textarea
+            id="description"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={3}
-            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+            className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
       </div>
       <div className="flex justify-end space-x-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-        >
+        <Button variant="outline" type="button" onClick={onCancel}>
           取消
-        </button>
-        <button
-          type="submit"
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
+        </Button>
+        <Button type="submit">
           保存
-        </button>
+        </Button>
       </div>
     </form>
   )
 }
 
-// 添加员工对话框
-function AddStaffModal({
-  onSave,
-  onClose
+// 添加员工表单
+function AddStaffForm({
+  onSave
 }: {
   onSave: (data: any) => void
-  onClose: () => void
 }) {
   const [formData, setFormData] = useState({
     userId: '',
@@ -356,46 +358,34 @@ function AddStaffModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">添加员工</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">用户ID</label>
-            <input
-              type="text"
-              value={formData.userId}
-              onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">职位</label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-            />
-          </div>
-          <div className="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              添加
-            </button>
-          </div>
-        </form>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <Label htmlFor="userId">用户ID</Label>
+        <Input
+          id="userId"
+          type="text"
+          value={formData.userId}
+          onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
+          required
+        />
       </div>
-    </div>
+      <div>
+        <Label htmlFor="title">职位</Label>
+        <Input
+          id="title"
+          type="text"
+          value={formData.title}
+          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+        />
+      </div>
+      <DialogFooter>
+        <Button variant="outline" type="button">
+          取消
+        </Button>
+        <Button type="submit">
+          添加
+        </Button>
+      </DialogFooter>
+    </form>
   )
 }

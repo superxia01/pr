@@ -118,7 +118,7 @@ export default function ServiceProviderInfo() {
 
           <div className="p-6">
             {/* 服务商基本信息 */}
-            <div className="mb-8">
+            <div className="bg-white rounded-lg shadow mb-8 p-6">
               <h2 className="text-lg font-medium text-gray-900 mb-4">基本信息</h2>
               {editMode ? (
                 <EditProviderForm
@@ -142,15 +142,17 @@ export default function ServiceProviderInfo() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">状态</label>
-                    <span className={`mt-1 px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      provider.status === 'active' ? 'bg-green-100 text-green-800' :
-                      provider.status === 'suspended' ? 'bg-red-100 text-red-800' :
-                      'bg-gray-100 text-gray-800'
-                    }`}>
-                      {provider.status === 'active' ? '正常' :
-                       provider.status === 'suspended' ? '暂停' :
-                       provider.status === 'inactive' ? '未激活' : provider.status}
-                    </span>
+                    <div className="mt-1">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        provider.status === 'active' ? 'bg-blue-100 text-blue-800' :
+                        provider.status === 'suspended' ? 'bg-red-100 text-red-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {provider.status === 'active' ? '正常' :
+                         provider.status === 'suspended' ? '暂停' :
+                         provider.status === 'inactive' ? '未激活' : provider.status}
+                      </span>
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">创建时间</label>
@@ -161,7 +163,7 @@ export default function ServiceProviderInfo() {
             </div>
 
             {/* 员工管理 */}
-            <div>
+            <div className="bg-white rounded-lg shadow p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-medium text-gray-900">员工管理</h2>
                 <button
@@ -171,29 +173,28 @@ export default function ServiceProviderInfo() {
                   添加员工
                 </button>
               </div>
-
               {staff.length === 0 ? (
                 <div className="text-center py-12 bg-gray-50 rounded-lg">
                   <p className="text-gray-500">暂无员工</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div className="overflow-hidden">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           姓名
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           职位
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           权限数量
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           状态
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           操作
                         </th>
                       </tr>
@@ -211,8 +212,8 @@ export default function ServiceProviderInfo() {
                             {s.permissions?.length || 0}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                              s.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              s.status === 'active' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
                             }`}>
                               {s.status === 'active' ? '正常' : '未激活'}
                             </span>
@@ -236,10 +237,15 @@ export default function ServiceProviderInfo() {
 
             {/* 添加员工对话框 */}
             {showAddStaff && (
-              <AddStaffModal
-                onSave={handleAddStaff}
-                onClose={() => setShowAddStaff(false)}
-              />
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">添加员工</h3>
+                  <AddStaffForm
+                    onSave={handleAddStaff}
+                    onCancel={() => setShowAddStaff(false)}
+                  />
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -251,17 +257,17 @@ export default function ServiceProviderInfo() {
               <h2 className="text-lg font-medium text-gray-900">关联商家</h2>
             </div>
             <div className="p-6">
-              <div className="overflow-x-auto">
+              <div className="overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         商家名称
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         管理员
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         状态
                       </th>
                     </tr>
@@ -276,8 +282,8 @@ export default function ServiceProviderInfo() {
                           {merchant.admin?.nickname || merchant.adminId}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                            merchant.status === 'active' ? 'bg-green-100 text-green-800' :
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            merchant.status === 'active' ? 'bg-blue-100 text-blue-800' :
                             merchant.status === 'suspended' ? 'bg-red-100 text-red-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>
@@ -323,29 +329,32 @@ function EditProviderForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium text-gray-700">服务商名称</label>
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700">服务商名称</label>
         <input
+          id="name"
           type="text"
           value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, name: e.target.value })}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
           required
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700">Logo URL</label>
+        <label htmlFor="logoUrl" className="block text-sm font-medium text-gray-700">Logo URL</label>
         <input
+          id="logoUrl"
           type="url"
           value={formData.logoUrl}
-          onChange={(e) => setFormData({ ...formData, logoUrl: e.target.value })}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, logoUrl: e.target.value })}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700">服务商描述</label>
+        <label htmlFor="description" className="block text-sm font-medium text-gray-700">服务商描述</label>
         <textarea
+          id="description"
           value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, description: e.target.value })}
           rows={3}
           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
         />
@@ -369,13 +378,13 @@ function EditProviderForm({
   )
 }
 
-// 添加员工对话框
-function AddStaffModal({
+// 添加员工表单
+function AddStaffForm({
   onSave,
-  onClose
+  onCancel
 }: {
   onSave: (data: any) => void
-  onClose: () => void
+  onCancel: () => void
 }) {
   const [formData, setFormData] = useState({
     userId: '',
@@ -389,46 +398,43 @@ function AddStaffModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">添加员工</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">用户ID</label>
-            <input
-              type="text"
-              value={formData.userId}
-              onChange={(e) => setFormData({ ...formData, userId: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700">职位</label>
-            <input
-              type="text"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-            />
-          </div>
-          <div className="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              添加
-            </button>
-          </div>
-        </form>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label htmlFor="userId" className="block text-sm font-medium text-gray-700">用户ID</label>
+        <input
+          id="userId"
+          type="text"
+          value={formData.userId}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, userId: e.target.value })}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+          required
+        />
       </div>
-    </div>
+      <div>
+        <label htmlFor="title" className="block text-sm font-medium text-gray-700">职位</label>
+        <input
+          id="title"
+          type="text"
+          value={formData.title}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, title: e.target.value })}
+          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+        />
+      </div>
+      <div className="flex justify-end space-x-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+        >
+          取消
+        </button>
+        <button
+          type="submit"
+          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+        >
+          添加
+        </button>
+      </div>
+    </form>
   )
 }

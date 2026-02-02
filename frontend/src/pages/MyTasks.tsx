@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { taskApi } from '../services/api'
 import type { Task } from '../types'
+import { DataTable } from '../components/ui/data-table'
+import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 
 export default function MyTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -67,6 +71,17 @@ export default function MyTasks() {
     }
   }
 
+  const getStatusVariant = (status: string) => {
+    switch (status) {
+      case 'OPEN': return 'default'
+      case 'ASSIGNED': return 'default'
+      case 'SUBMITTED': return 'secondary'
+      case 'APPROVED': return 'default'
+      case 'REJECTED': return 'destructive'
+      default: return 'default'
+    }
+  }
+
   const getStatusText = (status: string) => {
     switch (status) {
       case 'OPEN': return '开放中'
@@ -88,17 +103,18 @@ export default function MyTasks() {
               <h1 className="text-2xl font-bold text-gray-900">我的任务</h1>
               <p className="mt-1 text-sm text-gray-500">管理您接取的任务</p>
             </div>
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm"
-            >
-              <option value="">全部状态</option>
-              <option value="ASSIGNED">已接取</option>
-              <option value="SUBMITTED">已提交</option>
-              <option value="APPROVED">已通过</option>
-              <option value="REJECTED">已拒绝</option>
-            </select>
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue placeholder="全部状态" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">全部状态</SelectItem>
+                <SelectItem value="ASSIGNED">已接取</SelectItem>
+                <SelectItem value="SUBMITTED">已提交</SelectItem>
+                <SelectItem value="APPROVED">已通过</SelectItem>
+                <SelectItem value="REJECTED">已拒绝</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* 内容 */}
@@ -123,81 +139,97 @@ export default function MyTasks() {
             )}
 
             {!loading && tasks.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        营销活动
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        积分奖励
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        状态
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        截止时间
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                        操作
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {tasks.map((task) => (
-                      <tr key={task.id}>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm font-medium text-gray-900">
-                            {task.campaign?.title || '未知活动'}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            名额 #{task.taskSlotNumber}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-bold text-blue-600">
-                            {task.campaign?.taskAmount || 0}
-                          </span>
-                          <span className="text-xs text-gray-500 ml-1">积分</span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(task.status)}`}>
-                            {getStatusText(task.status)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {task.campaign?.submissionDeadline ? new Date(task.campaign.submissionDeadline).toLocaleString() : '-'}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                          {task.status === 'ASSIGNED' && (
-                            <button
-                              onClick={() => openSubmitModal(task)}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              提交任务
-                            </button>
-                          )}
-                          {task.status === 'SUBMITTED' && (
-                            <span className="text-gray-400">等待审核</span>
-                          )}
-                          {task.status === 'APPROVED' && (
-                            <span className="text-green-600">已完成</span>
-                          )}
-                          {task.status === 'REJECTED' && (
-                            <button
-                              onClick={() => openSubmitModal(task)}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              重新提交
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                data={tasks}
+                columns={[
+                  {
+                    id: 'campaign',
+                    header: '营销活动',
+                    accessorKey: 'campaign',
+                    cell: ({ row }) => (
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {row.campaign?.title || '未知活动'}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          名额 #{row.taskSlotNumber}
+                        </div>
+                      </div>
+                    ),
+                  },
+                  {
+                    id: 'reward',
+                    header: '积分奖励',
+                    accessorKey: 'campaign',
+                    cell: ({ row }) => (
+                      <div>
+                        <span className="text-sm font-bold text-blue-600">
+                          {row.campaign?.taskAmount || 0}
+                        </span>
+                        <span className="text-xs text-gray-500 ml-1">积分</span>
+                      </div>
+                    ),
+                  },
+                  {
+                    id: 'status',
+                    header: '状态',
+                    accessorKey: 'status',
+                    cell: ({ row }) => (
+                      <Badge variant={getStatusVariant(row.status)} className={getStatusColor(row.status)}>
+                        {getStatusText(row.status)}
+                      </Badge>
+                    ),
+                  },
+                  {
+                    id: 'deadline',
+                    header: '截止时间',
+                    accessorKey: 'campaign',
+                    cell: ({ row }) => (
+                      <div className="text-sm text-gray-500">
+                        {row.campaign?.submissionDeadline
+                          ? new Date(row.campaign.submissionDeadline).toLocaleString()
+                          : '-'
+                        }
+                      </div>
+                    ),
+                  },
+                  {
+                    id: 'actions',
+                    header: '操作',
+                    cell: ({ row }) => (
+                      <div className="text-sm font-medium">
+                        {row.status === 'ASSIGNED' && (
+                          <Button
+                            variant="ghost"
+                            onClick={() => openSubmitModal(row)}
+                            className="text-blue-600 hover:text-blue-900 hover:bg-blue-50"
+                          >
+                            提交任务
+                          </Button>
+                        )}
+                        {row.status === 'SUBMITTED' && (
+                          <span className="text-gray-400">等待审核</span>
+                        )}
+                        {row.status === 'APPROVED' && (
+                          <span className="text-green-600">已完成</span>
+                        )}
+                        {row.status === 'REJECTED' && (
+                          <Button
+                            variant="ghost"
+                            onClick={() => openSubmitModal(row)}
+                            className="text-red-600 hover:text-red-900 hover:bg-red-50"
+                          >
+                            重新提交
+                          </Button>
+                        )}
+                      </div>
+                    ),
+                  },
+                ]}
+                searchable={false}
+                pageSizeOptions={[10, 20, 30, 50]}
+                emptyMessage="暂无任务"
+              />
             )}
           </div>
         </div>

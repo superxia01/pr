@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { authApi } from '../services/api'
 import type { LoginResponse } from '../types'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { Label } from '../components/ui/label'
+import { Card, CardContent, CardHeader } from '../components/ui/card'
+import { Badge } from '../components/ui/badge'
 
 export default function Login() {
   const [loginType, setLoginType] = useState<'wechat' | 'password'>('wechat')
@@ -100,101 +105,95 @@ export default function Login() {
         </div>
 
         {/* 登录卡片 */}
-        <div className="bg-white rounded-2xl shadow-xl p-8">
-          {/* 登录方式切换 */}
-          <div className="flex mb-6 bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setLoginType('wechat')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                loginType === 'wechat'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              微信登录
-            </button>
-            <button
-              onClick={() => setLoginType('password')}
-              className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                loginType === 'password'
-                  ? 'bg-white text-blue-600 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              密码登录
-            </button>
-          </div>
-
-          {/* 错误提示 */}
-          {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
-              {error}
-            </div>
-          )}
-
-          {/* 微信登录 */}
-          {loginType === 'wechat' && (
-            <div className="space-y-4">
-              <div className="text-center text-gray-600 mb-6">
-                <p>点击下方按钮使用微信账号登录</p>
-              </div>
-              <button
-                onClick={handleWeChatLogin}
-                disabled={loading}
-                className="w-full bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        <Card className="shadow-xl">
+          <CardHeader className="space-y-4">
+            {/* 登录方式切换 */}
+            <div className="flex bg-muted rounded-lg p-1">
+              <Button
+                onClick={() => setLoginType('wechat')}
+                variant={loginType === 'wechat' ? 'default' : 'ghost'}
+                className="flex-1"
               >
-                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-6.656-6.088V8.89c-.135-.01-.27-.027-.407-.03zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z" />
-                </svg>
-                {loading ? '登录中...' : '微信登录'}
-              </button>
-            </div>
-          )}
-
-          {/* 密码登录 */}
-          {loginType === 'password' && (
-            <form onSubmit={handlePasswordLogin} className="space-y-4">
-              <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-                  用户名
-                </label>
-                <input
-                  type="text"
-                  id="username"
-                  name="username"
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  placeholder="请输入用户名"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                  密码
-                </label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  required
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-                  placeholder="请输入密码"
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                微信登录
+              </Button>
+              <Button
+                onClick={() => setLoginType('password')}
+                variant={loginType === 'password' ? 'default' : 'ghost'}
+                className="flex-1"
               >
-                {loading ? '登录中...' : '登录'}
-              </button>
-            </form>
-          )}
-        </div>
+                密码登录
+              </Button>
+            </div>
+
+            {/* 错误提示 */}
+            {error && (
+              <Badge variant="destructive" className="w-full py-2 px-3 justify-center">
+                {error}
+              </Badge>
+            )}
+          </CardHeader>
+
+          <CardContent>
+            {/* 微信登录 */}
+            {loginType === 'wechat' && (
+              <div className="space-y-4">
+                <div className="text-center text-muted-foreground mb-6">
+                  <p>点击下方按钮使用微信账号登录</p>
+                </div>
+                <Button
+                  onClick={handleWeChatLogin}
+                  disabled={loading}
+                  className="w-full bg-green-500 hover:bg-green-600"
+                  size="lg"
+                >
+                  <svg className="w-6 h-6 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 0 1 .213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 0 0 .167-.054l1.903-1.114a.864.864 0 0 1 .717-.098 10.16 10.16 0 0 0 2.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178A1.17 1.17 0 0 1 4.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 0 1-1.162 1.178 1.17 1.17 0 0 1-1.162-1.178c0-.651.52-1.18 1.162-1.18zm5.34 2.867c-1.797-.052-3.746.512-5.28 1.786-1.72 1.428-2.687 3.72-1.78 6.22.942 2.453 3.666 4.229 6.884 4.229.826 0 1.622-.12 2.361-.336a.722.722 0 0 1 .598.082l1.584.926a.272.272 0 0 0 .14.047c.134 0 .24-.111.24-.247 0-.06-.023-.12-.038-.177l-.327-1.233a.582.582 0 0 1-.023-.156.49.49 0 0 1 .201-.398C23.024 18.48 24 16.82 24 14.98c0-3.21-2.931-5.837-6.656-6.088V8.89c-.135-.01-.27-.027-.407-.03zm-2.53 3.274c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.97-.982zm4.844 0c.535 0 .969.44.969.982a.976.976 0 0 1-.969.983.976.976 0 0 1-.969-.983c0-.542.434-.982.969-.982z" />
+                  </svg>
+                  {loading ? '登录中...' : '微信登录'}
+                </Button>
+              </div>
+            )}
+
+            {/* 密码登录 */}
+            {loginType === 'password' && (
+              <form onSubmit={handlePasswordLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">用户名</Label>
+                  <Input
+                    type="text"
+                    id="username"
+                    name="username"
+                    required
+                    placeholder="请输入用户名"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">密码</Label>
+                  <Input
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                    placeholder="请输入密码"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full"
+                  size="lg"
+                >
+                  {loading ? '登录中...' : '登录'}
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
 
         {/* 底部提示 */}
-        <p className="text-center text-gray-500 text-sm mt-6">
+        <p className="text-center text-muted-foreground text-sm mt-6">
           登录即表示同意《用户协议》和《隐私政策》
         </p>
       </div>

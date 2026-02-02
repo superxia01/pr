@@ -1,26 +1,29 @@
 import { useEffect, useState } from 'react'
 import { taskApi } from '../services/api'
 import type { Task } from '../types'
+import { DataTable } from '../components/ui/data-table'
+import { Button } from '../components/ui/button'
+import { Badge } from '../components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card'
 
 export default function TaskHall() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  // const [total, setTotal] = useState(0)
+  // const [page, setPage] = useState(1)
   const pageSize = 20
 
   useEffect(() => {
     loadTasks()
-  }, [page])
+  }, [])
 
   const loadTasks = async () => {
     setLoading(true)
     setError(null)
     try {
-      const response = await taskApi.getTaskHall({ page, page_size: pageSize })
+      const response = await taskApi.getTaskHall({ page: 1, page_size: pageSize })
       setTasks(response.data)
-      setTotal(response.total || 0)
     } catch (err: any) {
       setError(err.response?.data?.error || '加载任务失败')
     } finally {
@@ -41,18 +44,148 @@ export default function TaskHall() {
     }
   }
 
+  // 定义表格列
+  const columns = [
+    {
+      id: 'campaign',
+      header: '活动信息',
+      sortable: false,
+      cell: ({ row }: { row: Task }) => (
+        <div className="flex flex-col">
+          <h4 className="font-medium text-gray-900">
+            {row.campaign?.title || '未知活动'}
+          </h4>
+          <p className="text-sm text-gray-500 line-clamp-2 mt-1">
+            {row.campaign?.requirements || '无要求'}
+          </p>
+        </div>
+      )
+    },
+    {
+      id: 'reward',
+      header: '积分奖励',
+      sortable: false,
+      cell: ({ row }: { row: Task }) => (
+        <div className="text-center">
+          <span className="text-lg font-bold text-blue-600">
+            {row.campaign?.taskAmount || 0}
+          </span>
+          <span className="text-sm text-gray-500 ml-1">积分</span>
+        </div>
+      )
+    },
+    {
+      id: 'status',
+      header: '状态',
+      sortable: false,
+      cell: ({ row }: { row: Task }) => (
+        <div className="flex justify-center">
+          <Badge
+            variant={
+              row.status === 'OPEN' ? 'default' :
+              row.status === 'ASSIGNED' ? 'secondary' :
+              row.status === 'SUBMITTED' ? 'outline' :
+              row.status === 'APPROVED' ? 'secondary' :
+              'destructive'
+            }
+          >
+            {row.status === 'OPEN' && '可接取'}
+            {row.status === 'ASSIGNED' && '已分配'}
+            {row.status === 'SUBMITTED' && '已提交'}
+            {row.status === 'APPROVED' && '已通过'}
+            {row.status === 'REJECTED' && '已拒绝'}
+          </Badge>
+        </div>
+      )
+    },
+    {
+      id: 'priority',
+      header: '优先级',
+      sortable: false,
+      cell: ({ row }: { row: Task }) => (
+        <div className="flex justify-center">
+          <Badge
+            variant={
+              row.priority === 'HIGH' ? 'destructive' :
+              row.priority === 'MEDIUM' ? 'secondary' :
+              'outline'
+            }
+          >
+            {row.priority === 'HIGH' && '高'}
+            {row.priority === 'MEDIUM' && '中'}
+            {row.priority === 'LOW' && '低'}
+          </Badge>
+        </div>
+      )
+    },
+    {
+      id: 'platform',
+      header: '平台',
+      sortable: false,
+      cell: ({ row }: { row: Task }) => (
+        <div className="text-center">
+          <span className="text-sm font-medium text-gray-700">
+            {row.platform || '未指定'}
+          </span>
+        </div>
+      )
+    },
+    {
+      id: 'slot',
+      header: '任务名额',
+      sortable: false,
+      cell: ({ row }: { row: Task }) => (
+        <div className="text-center">
+          <span className="text-sm font-medium text-gray-700">
+            #{row.taskSlotNumber}
+          </span>
+        </div>
+      )
+    },
+    {
+      id: 'deadline',
+      header: '截止时间',
+      sortable: false,
+      cell: ({ row }: { row: Task }) => (
+        <div className="text-center">
+          <span className="text-sm text-gray-700">
+            {row.campaign?.taskDeadline ?
+              new Date(row.campaign.taskDeadline).toLocaleDateString() :
+              '未设置'
+            }
+          </span>
+        </div>
+      )
+    },
+    {
+      id: 'actions',
+      header: '操作',
+      sortable: false,
+      cell: ({ row }: { row: Task }) => (
+        <div className="flex justify-center">
+          <Button
+            onClick={() => handleAcceptTask(row.id)}
+            disabled={row.status !== 'OPEN'}
+            className="w-full"
+          >
+            接任务
+          </Button>
+        </div>
+      )
+    }
+  ]
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
-        <div className="bg-white rounded-lg shadow">
-          {/* 标题 */}
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h1 className="text-2xl font-bold text-gray-900">任务大厅</h1>
-            <p className="mt-1 text-sm text-gray-500">查看并接取您感兴趣的任务</p>
-          </div>
-
-          {/* 内容 */}
-          <div className="p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl font-bold text-gray-900">任务大厅</CardTitle>
+            <CardDescription className="text-sm text-gray-500">
+              查看并接取您感兴趣的任务
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
             {loading && (
               <div className="text-center py-12">
                 <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -73,87 +206,23 @@ export default function TaskHall() {
             )}
 
             {!loading && tasks.length > 0 && (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {tasks.map((task) => (
-                    <div key={task.id} className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow">
-                      {/* 营销活动标题 */}
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                        {task.campaign?.title || '未知活动'}
-                      </h3>
-
-                      {/* 任务要求 */}
-                      <p className="text-sm text-gray-600 mb-4 line-clamp-2">
-                        {task.campaign?.requirements || '无要求'}
-                      </p>
-
-                      {/* 积分奖励 */}
-                      <div className="mb-4">
-                        <span className="text-2xl font-bold text-blue-600">
-                          {task.campaign?.taskAmount || 0}
-                        </span>
-                        <span className="text-sm text-gray-500 ml-1">积分</span>
-                      </div>
-
-                      {/* 任务详情 */}
-                      <div className="space-y-2 text-sm text-gray-600 mb-4">
-                        <div className="flex justify-between">
-                          <span>任务名额：</span>
-                          <span className="font-medium">#{task.taskSlotNumber}</span>
-                        </div>
-                        {task.platform && (
-                          <div className="flex justify-between">
-                            <span>平台：</span>
-                            <span className="font-medium">{task.platform}</span>
-                          </div>
-                        )}
-                        {task.campaign?.taskDeadline && (
-                          <div className="flex justify-between">
-                            <span>截止时间：</span>
-                            <span className="font-medium">
-                              {new Date(task.campaign.taskDeadline).toLocaleDateString()}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* 操作按钮 */}
-                      <button
-                        onClick={() => handleAcceptTask(task.id)}
-                        className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
-                      >
-                        接任务
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* 分页 */}
-                {total > pageSize && (
-                  <div className="mt-6 flex justify-center items-center gap-4">
-                    <button
-                      onClick={() => setPage(p => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      上一页
-                    </button>
-                    <span className="text-sm text-gray-600">
-                      第 {page} 页，共 {Math.ceil(total / pageSize)} 页
-                    </span>
-                    <button
-                      onClick={() => setPage(p => p + 1)}
-                      disabled={page >= Math.ceil(total / pageSize)}
-                      className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      下一页
-                    </button>
-                  </div>
-                )}
-              </>
+              <div className="space-y-6">
+                <DataTable
+                  data={tasks}
+                  columns={columns}
+                  searchable={true}
+                  pageSize={pageSize}
+                  onRowClick={(row) => {
+                    if (row.status === 'OPEN') {
+                      handleAcceptTask(row.id)
+                    }
+                  }}
+                  emptyMessage="暂无任务数据"
+                />
+              </div>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

@@ -22,9 +22,10 @@ export type ColumnDef<T> = {
   id: string
   header: string
   accessorKey?: keyof T | ((row: T) => any)
-  cell?: (props: { row: T; value: any }) => React.ReactNode
+  cell?: (props: { row: T; value: any; isEditing?: boolean; onStartEdit?: () => void; onUpdate?: (value: any) => void }) => React.ReactNode
   sortable?: boolean
   filterable?: boolean
+  editable?: boolean
 }
 
 export type PaginationState = {
@@ -44,6 +45,7 @@ type DataTableProps<T> = {
   pageSize?: number
   pageSizeOptions?: number[]
   onRowClick?: (row: T) => void
+  onCellUpdate?: (rowId: string, field: string, value: any) => void
   emptyMessage?: string
   className?: string
 }
@@ -55,6 +57,7 @@ export function DataTable<T>({
   pageSize = 10,
   pageSizeOptions = [10, 20, 30, 50],
   onRowClick,
+  onCellUpdate,
   emptyMessage = "暂无数据",
   className,
 }: DataTableProps<T>) {
@@ -66,6 +69,9 @@ export function DataTable<T>({
   const [sorting, setSorting] = useState<SortingState>(null)
   const [filterColumn, setFilterColumn] = useState<string | null>(null)
   const [filterValue, setFilterValue] = useState("")
+
+  // 编辑状态
+  const [editingCell, setEditingCell] = useState<{ rowId: string; field: string } | null>(null)
 
   // 计算过滤后的数据
   const filteredData = useMemo(() => {
@@ -144,6 +150,32 @@ export function DataTable<T>({
       return value
     }
     return null
+  }
+
+  // 获取行ID
+  const getRowId = (row: T) => {
+    return (row as any).id || JSON.stringify(row)
+  }
+
+  // 处理单元格更新
+  const handleCellUpdate = (row: T, column: ColumnDef<T>, value: any) => {
+    const rowId = getRowId(row)
+    if (onCellUpdate && column.accessorKey) {
+      const field = typeof column.accessorKey === "function"
+        ? column.id
+        : String(column.accessorKey)
+      onCellUpdate(rowId, field, value)
+      setEditingCell(null)
+    }
+  }
+
+  // 检查是否正在编辑
+  const isEditing = (row: T, column: ColumnDef<T>) => {
+    const rowId = getRowId(row)
+    const field = typeof column.accessorKey === "function"
+      ? column.id
+      : String(column.accessorKey)
+    return editingCell?.rowId === rowId && editingCell?.field === field
   }
 
   // 处理排序
@@ -260,16 +292,54 @@ export function DataTable<T>({
                   className={cn(onRowClick && "cursor-pointer")}
                   onClick={() => onRowClick?.(row)}
                 >
-                  {columns.map((column) => (
-                    <TableCell key={column.id}>
-                      {column.cell
-                        ? column.cell({
+                  {columns.map((column) => {
+                    const cellIsEditing = isEditing(row, column)
+                    const cellValue = getCellValue(row, column)
+
+                    return (
+                      <TableCell key={column.id}>
+                        {column.editable && !column.cell ? (
+                          // 可编辑单元格（默认Input）
+                          cellIsEditing ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                defaultValue={cellValue}
+                                autoFocus
+                                onBlur={(e) => handleCellUpdate(row, column, e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleCellUpdate(row, column, e.currentTarget.value)
+                                  } else if (e.key === 'Escape') {
+                                    setEditingCell(null)
+                                  }
+                                }}
+                                className="h-8"
+                              />
+                            </div>
+                          ) : (
+                            <div
+                              className="min-h-[2rem] cursor-pointer hover:bg-muted/50 rounded px-2 py-1 -mx-2"
+                              onClick={() => setEditingCell({ rowId: getRowId(row), field: String(column.accessorKey) })}
+                            >
+                              {String(cellValue ?? "")}
+                            </div>
+                          )
+                        ) : column.cell ? (
+                          // 自定义渲染函数
+                          column.cell({
                             row,
-                            value: getCellValue(row, column),
+                            value: cellValue,
+                            isEditing: cellIsEditing,
+                            onStartEdit: () => setEditingCell({ rowId: getRowId(row), field: String(column.accessorKey) }),
+                            onUpdate: (value) => handleCellUpdate(row, column, value),
                           })
-                        : String(getCellValue(row, column) ?? "")}
-                    </TableCell>
-                  ))}
+                        ) : (
+                          // 普通单元格
+                          String(cellValue ?? "")
+                        )}
+                      </TableCell>
+                    )
+                  })}
                 </TableRow>
               ))
             )}
