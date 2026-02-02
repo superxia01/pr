@@ -3,6 +3,11 @@ import { useAuth } from '../contexts/AuthContext'
 export default function Dashboard() {
   const { user, logout } = useAuth()
 
+  const canManageInvitations = () => {
+    const role = user?.currentRole
+    return role === 'super_admin' || role === 'service_provider_admin' || role === 'merchant_admin'
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* 顶部导航 */}
@@ -13,6 +18,14 @@ export default function Dashboard() {
               <h1 className="text-xl font-bold text-gray-900">PR Business</h1>
             </div>
             <div className="flex items-center gap-4">
+              {canManageInvitations() && (
+                <a
+                  href="/invitations"
+                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  邀请码管理
+                </a>
+              )}
               <span className="text-sm text-gray-700">
                 欢迎，{user?.nickname || '用户'}
               </span>
@@ -51,6 +64,18 @@ export default function Dashboard() {
               <h3 className="font-medium text-purple-900">用户ID</h3>
               <p className="text-purple-700 text-sm">{user?.id}</p>
             </div>
+
+            {canManageInvitations() && (
+              <div className="p-4 bg-yellow-50 rounded-lg">
+                <h3 className="font-medium text-yellow-900">快捷操作</h3>
+                <a
+                  href="/invitations"
+                  className="text-yellow-700 hover:text-yellow-800 underline"
+                >
+                  管理邀请码 →
+                </a>
+              </div>
+            )}
           </div>
         </div>
       </main>

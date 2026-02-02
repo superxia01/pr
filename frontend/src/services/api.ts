@@ -6,7 +6,11 @@ import type {
   RefreshTokenRequest,
   SwitchRoleRequest,
   User,
-  ApiError
+  ApiError,
+  InvitationCode,
+  CreateInvitationCodeRequest,
+  UseInvitationCodeRequest,
+  UseInvitationCodeResponse,
 } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
@@ -99,6 +103,51 @@ export const authApi = {
   // 获取当前用户
   getCurrentUser: async () => {
     const response = await api.get<User>('/api/v1/user/me')
+    return response.data
+  },
+}
+
+// 邀请码API
+export const invitationApi = {
+  // 创建邀请码
+  createInvitationCode: async (data: CreateInvitationCodeRequest) => {
+    const response = await api.post<InvitationCode>('/api/v1/invitations', data)
+    return response.data
+  },
+
+  // 获取邀请码列表
+  listInvitationCodes: async (params?: {
+    codeType?: string
+    ownerId?: string
+    status?: string
+  }) => {
+    const response = await api.get<{ codes: InvitationCode[]; total: number }>(
+      '/api/v1/invitations',
+      { params }
+    )
+    return response.data
+  },
+
+  // 获取邀请码详情
+  getInvitationCode: async (code: string) => {
+    const response = await api.get<InvitationCode>(`/api/v1/invitations/${code}`)
+    return response.data
+  },
+
+  // 使用邀请码
+  useInvitationCode: async (data: UseInvitationCodeRequest) => {
+    const response = await api.post<UseInvitationCodeResponse>(
+      '/api/v1/invitations/use',
+      data
+    )
+    return response.data
+  },
+
+  // 禁用邀请码
+  disableInvitationCode: async (code: string) => {
+    const response = await api.post<{ message: string }>(
+      `/api/v1/invitations/${code}/disable`
+    )
     return response.data
   },
 }
