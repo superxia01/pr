@@ -16,6 +16,9 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 	merchantController := controllers.NewMerchantController(db)
 	serviceProviderController := controllers.NewServiceProviderController(db)
 	creatorController := controllers.NewCreatorController(db)
+	campaignController := controllers.NewCampaignController(db)
+	taskController := controllers.NewTaskController(db)
+	creditController := controllers.NewCreditController(db)
 
 	// API路由组
 	v1 := r.Group("/api/v1")
@@ -82,6 +85,29 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 			protected.POST("/creators/:id/break-relationship", creatorController.BreakInviterRelationship)
 			protected.GET("/creator/me", creatorController.GetMyCreatorProfile)
 			protected.PUT("/creator/me", creatorController.UpdateMyCreatorProfile)
+
+			// 营销活动管理
+			protected.POST("/campaigns", campaignController.CreateCampaign)
+			protected.GET("/campaigns", campaignController.GetCampaigns)
+			protected.GET("/campaigns/my", campaignController.GetMyCampaigns)
+			protected.GET("/campaigns/:id", campaignController.GetCampaign)
+			protected.PUT("/campaigns/:id", campaignController.UpdateCampaign)
+			protected.DELETE("/campaigns/:id", campaignController.DeleteCampaign)
+
+			// 任务管理
+			protected.GET("/tasks", taskController.GetTasks)
+			protected.GET("/tasks/hall", taskController.GetTaskHall)
+			protected.GET("/tasks/my", taskController.GetMyTasks)
+			protected.GET("/tasks/pending-review", taskController.GetTasksForReview)
+			protected.GET("/tasks/:id", taskController.GetTask)
+			protected.POST("/tasks/:id/accept", taskController.AcceptTask)
+			protected.POST("/tasks/:id/submit", taskController.SubmitTask)
+			protected.POST("/tasks/:id/audit", taskController.AuditTask)
+
+			// 积分管理
+			protected.GET("/credit/balance", creditController.GetAccountBalance)
+			protected.GET("/credit/transactions", creditController.GetTransactions)
+			protected.POST("/credit/recharge", creditController.Recharge)
 		}
 	}
 }
