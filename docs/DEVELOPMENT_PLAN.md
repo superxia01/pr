@@ -17,8 +17,8 @@
 
 ## 📊 当前进度
 
-**当前阶段**: 阶段3 - 邀请码系统
-**进度**: 100% (3/3) ✅
+**当前阶段**: 阶段4 - 用户管理
+**进度**: 100% (4/4) ✅
 **完成时间**: 2026-02-02
 
 ---
@@ -647,6 +647,110 @@ pr-business/
 
 #### 下一步：
 - 阶段4：用户管理（商家、服务商、达人管理）
+
+---
+
+### 2026-02-02 (续4)
+
+**阶段4：用户管理** ✅ 已完成
+
+#### 完成内容：
+1. ✅ 商家管理模型和接口
+   - `backend/models/merchant.go` - 商家、商家员工、员工权限模型（100+行）
+   - `backend/controllers/merchant.go` - 商家CRUD接口（500+行）
+   - 创建商家、获取列表、获取详情、更新、删除
+   - 添加员工、获取员工列表、更新员工权限、删除员工
+   - 获取当前用户管理的商家
+
+2. ✅ 服务商管理模型和接口
+   - `backend/models/service_provider.go` - 服务商、员工、权限模型（100+行）
+   - `backend/controllers/service_provider.go` - 服务商CRUD接口（450+行）
+   - 创建服务商、获取列表、获取详情、更新、删除
+   - 添加员工、获取员工列表、更新员工权限、删除员工
+   - 获取当前用户管理的服务商
+
+3. ✅ 达人管理模型和接口
+   - `backend/models/creator.go` - 达人模型及枚举类型（70+行）
+   - `backend/controllers/creator.go` - 达人管理接口（350+行）
+   - 获取达人列表（支持分页和过滤）
+   - 获取达人详情、更新达人信息
+   - 达人等级统计、邀请关系查询
+   - 解除邀请关系
+   - 获取/更新当前用户的达人资料
+
+4. ✅ 工具函数
+   - `backend/utils/utils.go` - 角色检查辅助函数
+   - HasRole、HasAnyRole、HasAllRoles
+   - IsSuperAdmin、IsMerchantAdmin、IsServiceProviderAdmin、IsCreator 等
+
+5. ✅ 路由配置
+   - 商家管理：10个端点（CRUD + 员工管理）
+   - 服务商管理：10个端点（CRUD + 员工管理）
+   - 达人管理：8个端点（查询、更新、统计）
+
+6. ✅ 前端类型定义
+   - `frontend/src/types/index.ts` - 添加商家、服务商、达人类型（170行）
+   - Merchant、ServiceProvider、Creator 及相关请求/响应类型
+
+7. ✅ 前端API服务
+   - `frontend/src/services/api.ts` - 添加 3个API模块（220+行）
+   - merchantApi、serviceProviderApi、creatorApi
+
+8. ✅ 前端页面组件
+   - `frontend/src/pages/UserManagement.tsx` - 用户管理页面（超级管理员）
+   - `frontend/src/pages/MerchantInfo.tsx` - 商家信息管理页面（350+行）
+   - `frontend/src/pages/ServiceProviderInfo.tsx` - 服务商信息管理页面（400+行）
+   - `frontend/src/pages/CreatorProfile.tsx` - 达人个人中心页面（300+行）
+
+9. ✅ 路由和导航更新
+   - `frontend/src/App.tsx` - 添加 4个新路由
+   - `frontend/src/pages/Dashboard.tsx` - 根据角色动态显示导航链接
+
+#### 权限控制：
+- 超级管理员：可管理所有用户和组织
+- 服务商管理员：可管理自己的服务商信息和员工、查看关联商家
+- 商家管理员：可管理自己的商家信息和员工
+- 达人：可查看和编辑自己的资料
+
+#### 功能特性：
+- 用户管理支持分页和多条件过滤
+- 员工管理支持权限分配（授权/撤销）
+- 达人等级系统（UGC/KOC/INF/KOL）
+- 达人邀请关系管理和解除
+- 所有操作都有完整的权限检查
+
+#### 输出文件：
+- `backend/models/merchant.go` - 商家模型（110行）
+- `backend/models/service_provider.go` - 服务商模型（110行）
+- `backend/models/creator.go` - 达人模型（70行）
+- `backend/controllers/merchant.go` - 商家控制器（530行）
+- `backend/controllers/service_provider.go` - 服务商控制器（460行）
+- `backend/controllers/creator.go` - 达人控制器（360行）
+- `backend/utils/utils.go` - 工具函数（70行）
+- `frontend/src/types/index.ts` - 类型定义（新增170行）
+- `frontend/src/services/api.ts` - API服务（新增220行）
+- `frontend/src/pages/UserManagement.tsx` - 用户管理页面（240行）
+- `frontend/src/pages/MerchantInfo.tsx` - 商家信息页面（360行）
+- `frontend/src/pages/ServiceProviderInfo.tsx` - 服务商信息页面（410行）
+- `frontend/src/pages/CreatorProfile.tsx` - 达人中心页面（310行）
+
+#### Git提交：
+- 提交哈希: `32a6c8a`
+- 18个文件修改，3870行代码
+- 推送到 GitHub: `superxia01/pr-business`
+
+#### 构建结果：
+- 后端编译成功（24MB，略减小）
+- 前端构建成功（344KB，增加约60KB）
+
+#### 注意事项：
+- 所有API接口都有完整的权限检查
+- 员工权限系统支持动态授权和撤销
+- 达人邀请关系可以解除，解除后不影响历史数据
+- 前端根据用户角色动态显示导航和功能
+
+#### 下一步：
+- 阶段5：任务系统核心（营销活动、任务名额、提交流程）
 
 ---
 
