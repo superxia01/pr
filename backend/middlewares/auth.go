@@ -2,10 +2,12 @@ package middlewares
 
 import (
 	"net/http"
+	"pr-business/models"
 	"pr-business/utils"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 
 // AuthMiddleware JWT认证中间件
@@ -43,8 +45,20 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
+		// 查询用户对象
+		db := c.MustGet("db").(*gorm.DB)
+		var user models.User
+		if err := db.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "User not found",
+			})
+			c.Abort()
+			return
+		}
+
 		// 将用户信息存入上下文
 		c.Set("userId", claims.UserID)
+		c.Set("user", &user)
 		c.Set("currentRole", claims.Role)
 		c.Set("roles", claims.Roles)
 

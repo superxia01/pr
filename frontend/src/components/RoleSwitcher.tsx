@@ -1,12 +1,21 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { authApi } from '../services/api'
-import { getRoleName, getRoleDescription, getRoleColorClass } from '../lib/roles'
+import { getRoleName } from '../lib/roles'
+import { Button } from './ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from './ui/dialog'
 
 export default function RoleSwitcher() {
   const { user, updateUser } = useAuth()
   const [switching, setSwitching] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
 
   if (!user || user.roles.length <= 1) {
     return null
@@ -15,20 +24,22 @@ export default function RoleSwitcher() {
   const handleSwitchRole = async (newRole: string) => {
     if (newRole === user.currentRole || switching) return
 
-    // 确认提示
-    const currentRoleName = getRoleName(user.currentRole)
-    const newRoleName = getRoleName(newRole)
-    const confirmed = confirm(
-      `确认切换角色吗？\n\n当前角色：${currentRoleName}\n新角色：${newRoleName}\n\n切换后将重新加载页面。`
-    )
-
-    if (!confirmed) return
-
     setSwitching(true)
-    setError(null)
 
     try {
-      const response = await authApi.switchRole({ newRole })
+      // 转换为小写格式（后端期望小写）
+      const roleMapping: Record<string, string> = {
+        'SUPER_ADMIN': 'super_admin',
+        'MERCHANT_ADMIN': 'merchant_admin',
+        'MERCHANT_STAFF': 'merchant_staff',
+        'SP_ADMIN': 'service_provider_admin',
+        'SP_STAFF': 'service_provider_staff',
+        'CREATOR': 'creator',
+      }
+
+      const lowerCaseRole = roleMapping[newRole] || newRole.toLowerCase()
+
+      const response = await authApi.switchRole({ newRole: lowerCaseRole })
       localStorage.setItem('accessToken', response.accessToken)
 
       // 更新用户上下文
@@ -38,108 +49,83 @@ export default function RoleSwitcher() {
         lastUsedRole: response.lastUsedRole,
       })
 
-      // 成功提示
-      alert(`角色已切换为：${getRoleName(newRole)}`)
+      // 关闭对话框
+      setOpen(false)
 
-      // 重新加载页面以刷新所有状态
+      // 重新加载页面
       setTimeout(() => {
         window.location.reload()
       }, 300)
     } catch (err: any) {
-      const errorMsg = err.response?.data?.error || '切换角色失败，请重试'
-      setError(errorMsg)
-      console.error('切换角色失败:', err)
-      alert(errorMsg)
+      alert(err.response?.data?.error || '切换角色失败，请重试')
     } finally {
       setSwitching(false)
     }
   }
 
   return (
-    <div className="fixed top-4 right-4 z-50">
-      <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-4 min-w-[280px]">
-        {/* 标题 */}
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold text-gray-900">切换角色</h3>
-          {switching && (
-            <div className="flex items-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-              <span className="text-xs text-gray-500">切换中...</span>
-            </div>
-          )}
-        </div>
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" className="w-full justify-start text-gray-300 hover:text-white hover:bg-gray-800">
+          切换角色
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md bg-gray-800 text-gray-100 border-gray-700">
+        <DialogHeader>
+          <DialogTitle className="text-white">切换角色</DialogTitle>
+          <DialogDescription className="text-gray-400">
+            选择要使用的角色，切换后页面菜单会相应变化
+          </DialogDescription>
+        </DialogHeader>
 
-        {/* 错误提示 */}
-        {error && (
-          <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-xs text-red-600">{error}</p>
-          </div>
-        )}
-
-        {/* 当前角色提示 */}
-        <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-md">
-          <p className="text-xs text-blue-700">
-            当前角色：<span className="font-medium">{getRoleName(user.currentRole)}</span>
-          </p>
-        </div>
-
-        {/* 角色列表 */}
-        <div className="space-y-2">
+        <div className="space-y-2 py-4">
           {user.roles.map((role) => {
-            const isActive = role === user.currentRole
+            const isActive = role === 'SUPER_ADMIN' && user.currentRole === 'super_admin' ||
+                           role === 'MERCHANT_ADMIN' && user.currentRole === 'merchant_admin' ||
+                           role === 'SP_ADMIN' && user.currentRole === 'service_provider_admin' ||
+                           role === 'CREATOR' && user.currentRole === 'creator'
+
             return (
               <button
                 key={role}
                 onClick={() => handleSwitchRole(role)}
                 disabled={switching || isActive}
-                className={`w-full text-left px-3 py-2.5 rounded-lg border transition-all ${
+                className={`w-full text-left px-4 py-3 rounded-lg border transition-all ${
                   isActive
-                    ? 'border-blue-300 bg-blue-50 shadow-sm'
-                    : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    ? 'border-blue-500 bg-blue-600 text-white'
+                    : 'border-gray-600 hover:border-gray-500 hover:bg-gray-700 text-gray-200'
                 } ${switching ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      {isActive && (
-                        <span className="text-blue-600">
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path
-                              fillRule="evenodd"
-                              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                              clipRule="evenodd"
-                            />
-                          </svg>
-                        </span>
-                      )}
-                      <span className={`text-sm font-medium ${isActive ? 'text-blue-700' : 'text-gray-900'}`}>
-                        {getRoleName(role)}
-                      </span>
+                  <div>
+                    <div className="font-medium">{getRoleName(role)}</div>
+                    <div className={`text-xs mt-0.5 ${isActive ? 'text-blue-100' : 'text-gray-400'}`}>
+                      {isActive ? '当前角色' : '点击切换'}
                     </div>
-                    <p className={`text-xs mt-0.5 ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>
-                      {getRoleDescription(role)}
-                    </p>
                   </div>
-                  <div className="ml-2">
-                    <span
-                      className={`px-2 py-0.5 rounded text-xs font-medium ${getRoleColorClass(role)}`}
-                    >
-                      {role}
+                  {isActive && (
+                    <span className="text-white">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                        <path
+                          fillRule="evenodd"
+                          d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
                     </span>
-                  </div>
+                  )}
                 </div>
               </button>
             )
           })}
         </div>
 
-        {/* 底部提示 */}
-        <div className="mt-3 pt-3 border-t border-gray-200">
-          <p className="text-xs text-gray-500">
-            💡 提示：切换角色后，工作台菜单和权限会相应变化
-          </p>
-        </div>
-      </div>
-    </div>
+        {switching && (
+          <div className="text-center text-sm text-gray-400">
+            切换中...
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }

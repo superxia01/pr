@@ -21,7 +21,7 @@ export interface LoginRequest {
 }
 
 export interface PasswordLoginRequest {
-  username: string
+  phoneNumber: string
   password: string
 }
 
@@ -31,6 +31,8 @@ export interface LoginResponse {
   refreshToken: string
   expiresIn: number
   userId: string
+  nickname?: string
+  avatarUrl?: string
   roles: string[]
   currentRole: string
 }
@@ -175,16 +177,13 @@ export interface ServiceProvider {
 }
 
 export interface CreateServiceProviderRequest {
-  userId: string
   name: string
   description?: string
-  logoUrl?: string
 }
 
 export interface UpdateServiceProviderRequest {
   name?: string
   description?: string
-  logoUrl?: string
   status?: 'active' | 'suspended' | 'inactive'
 }
 

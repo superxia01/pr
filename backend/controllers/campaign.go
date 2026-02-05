@@ -74,7 +74,7 @@ func (ctrl *CampaignController) CreateCampaign(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查：只有商家管理员可以创建营销活动
-	if !utils.HasRole(user, "MERCHANT_ADMIN") {
+	if !utils.HasRole(user, "merchant_admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "只有商家管理员可以创建营销活动"})
 		return
 	}
@@ -145,7 +145,7 @@ func (ctrl *CampaignController) GetCampaigns(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限过滤
-	if utils.HasRole(user, "MERCHANT_ADMIN") && !utils.HasRole(user, "SUPER_ADMIN") {
+	if utils.HasRole(user, "merchant_admin") && !utils.HasRole(user, "super_admin") {
 		// 商家管理员只能看到自己的营销活动
 		var merchant models.Merchant
 		if err := ctrl.db.Where("admin_id = ?", user.ID).First(&merchant).Error; err == nil {
@@ -225,8 +225,8 @@ func (ctrl *CampaignController) UpdateCampaign(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查：只有营销活动所属商家的管理员可以更新
-	hasPermission := utils.HasRole(user, "SUPER_ADMIN") ||
-		(utils.HasRole(user, "MERCHANT_ADMIN") && user.ID == campaign.MerchantID.String())
+	hasPermission := utils.HasRole(user, "super_admin") ||
+		(utils.HasRole(user, "merchant_admin") && user.ID == campaign.MerchantID.String())
 
 	if !hasPermission {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限更新此营销活动"})
@@ -331,8 +331,8 @@ func (ctrl *CampaignController) DeleteCampaign(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查
-	hasPermission := utils.HasRole(user, "SUPER_ADMIN") ||
-		(utils.HasRole(user, "MERCHANT_ADMIN") && user.ID == campaign.MerchantID.String())
+	hasPermission := utils.HasRole(user, "super_admin") ||
+		(utils.HasRole(user, "merchant_admin") && user.ID == campaign.MerchantID.String())
 
 	if !hasPermission {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限删除此营销活动"})

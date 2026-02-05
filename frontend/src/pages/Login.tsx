@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { authApi } from '../services/api'
 import type { LoginResponse } from '../types'
@@ -9,50 +9,128 @@ import { Label } from '../components/ui/label'
 import { Card, CardContent, CardHeader } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+
 export default function Login() {
   const [loginType, setLoginType] = useState<'wechat' | 'password'>('wechat')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
   const { login } = useAuth()
+  const [searchParams] = useSearchParams()
 
-  const handleWeChatLogin = async () => {
+  // 处理微信登录回调
+  useEffect(() => {
+    const token = searchParams.get('token')
+    const refreshToken = searchParams.get('refreshToken')
+    const userId = searchParams.get('userId')
+    const code = searchParams.get('code')
+
+    // 情况1：微信内登录（直接有 token）
+    if (token && userId) {
+      setLoading(true)
+      fetch(`${API_BASE_URL}/api/v1/user/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+        .then(res => res.json())
+        .then(data => {
+          login(
+            token,
+            refreshToken || '',
+            {
+              ...data,
+              profile: data.profile || {},
+              roles: data.roles || [],
+            }
+          )
+          navigate('/dashboard', { replace: true })
+        })
+        .catch(() => {
+          login(
+            token,
+            refreshToken || '',
+            {
+              id: userId,
+              authCenterUserId: '',
+              nickname: '微信用户',
+              avatarUrl: '',
+              profile: {},
+              roles: [],
+              currentRole: '',
+              lastUsedRole: '',
+              status: 'active',
+              lastLoginAt: new Date().toISOString(),
+              lastLoginIp: '',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          )
+          navigate('/dashboard', { replace: true })
+        })
+        .finally(() => {
+          setLoading(false)
+        })
+      return
+    }
+
+    // 情况2：PC扫码登录（需要用 code 换 token）
+    if (code) {
+      setLoading(true)
+      fetch(`${API_BASE_URL}/api/v1/auth/wechat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ authCode: code }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.error) {
+            setError(data.error)
+            return
+          }
+          // 保存 token
+          login(
+            data.accessToken,
+            data.refreshToken || '',
+            {
+              id: data.userId,
+              authCenterUserId: '',
+              nickname: data.nickname || '微信用户',
+              avatarUrl: data.avatarUrl || '',
+              profile: {},
+              roles: data.roles || [],
+              currentRole: data.currentRole || '',
+              lastUsedRole: '',
+              status: 'active',
+              lastLoginAt: new Date().toISOString(),
+              lastLoginIp: '',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            }
+          )
+          navigate('/dashboard', { replace: true })
+        })
+        .catch((err) => {
+          setError(err.response?.data?.error || '登录失败，请重试')
+        })
+        .finally(() => {
+          setLoading(false)
+        })
+      return
+    }
+  }, [searchParams, login, navigate])
+
+  const handleWeChatLogin = () => {
     setError('')
     setLoading(true)
 
-    try {
-      // 模拟微信授权码
-      const mockAuthCode = 'mock_wechat_auth_code_' + Date.now()
-
-      const response: LoginResponse = await authApi.wechatLogin({ authCode: mockAuthCode })
-
-      login(
-        response.accessToken,
-        response.refreshToken,
-        {
-          id: response.userId,
-          authCenterUserId: '',
-          nickname: '用户',
-          avatarUrl: '',
-          profile: {},
-          roles: response.roles,
-          currentRole: response.currentRole,
-          lastUsedRole: '',
-          status: 'active',
-          lastLoginAt: new Date().toISOString(),
-          lastLoginIp: '',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        }
-      )
-
-      // 如果有角色，跳转到工作台；否则跳转到角色选择
-      navigate(response.roles.length > 0 ? '/dashboard' : '/select-role')
-    } catch (err: any) {
-      setError(err.response?.data?.error || '登录失败，请重试')
-    } finally {
-      setLoading(false)
-    }
+    // 重定向到后端的微信登录接口
+    // 后端会重定向到 auth-center 进行微信授权
+    // 授权成功后会回调到前端并携带 token
+    window.location.href = `${API_BASE_URL}/api/v1/auth/wechat/login`
   }
 
   const handlePasswordLogin = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -61,11 +139,11 @@ export default function Login() {
     setLoading(true)
 
     const formData = new FormData(e.currentTarget)
-    const username = formData.get('username') as string
+    const phoneNumber = formData.get('phoneNumber') as string
     const password = formData.get('password') as string
 
     try {
-      const response: LoginResponse = await authApi.passwordLogin({ username, password })
+      const response: LoginResponse = await authApi.passwordLogin({ phoneNumber, password })
 
       login(
         response.accessToken,
@@ -73,8 +151,8 @@ export default function Login() {
         {
           id: response.userId,
           authCenterUserId: '',
-          nickname: username,
-          avatarUrl: '',
+          nickname: response.nickname || phoneNumber,
+          avatarUrl: response.avatarUrl || '',
           profile: {},
           roles: response.roles,
           currentRole: response.currentRole,
@@ -87,7 +165,7 @@ export default function Login() {
         }
       )
 
-      navigate(response.roles.length > 0 ? '/dashboard' : '/select-role')
+      navigate('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.error || '登录失败，请重试')
     } finally {
@@ -121,7 +199,7 @@ export default function Login() {
                 variant={loginType === 'password' ? 'default' : 'ghost'}
                 className="flex-1"
               >
-                密码登录
+                手机号登录
               </Button>
             </div>
 
@@ -158,13 +236,13 @@ export default function Login() {
             {loginType === 'password' && (
               <form onSubmit={handlePasswordLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">用户名</Label>
+                  <Label htmlFor="phoneNumber">手机号</Label>
                   <Input
-                    type="text"
-                    id="username"
-                    name="username"
+                    type="tel"
+                    id="phoneNumber"
+                    name="phoneNumber"
                     required
-                    placeholder="请输入用户名"
+                    placeholder="请输入手机号"
                   />
                 </div>
 

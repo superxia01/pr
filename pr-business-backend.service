@@ -1,0 +1,20 @@
+[Unit]
+Description=PR Business Backend API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/var/www/pr-backend
+ExecStart=/var/www/pr-backend/pr-business
+Restart=always
+RestartSec=5
+Environment="PORT=8081"
+EnvironmentFile=/var/www/pr-backend/.env
+
+# 日志
+StandardOutput=append:/var/www/pr-backend/server.log
+StandardError=append:/var/www/pr-backend/server.log
+
+[Install]
+WantedBy=multi-user.target

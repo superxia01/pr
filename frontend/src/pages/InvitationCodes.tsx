@@ -248,10 +248,10 @@ export default function InvitationCodes() {
                 value={createForm.codeType}
                 onValueChange={(value) => setCreateForm({ ...createForm, codeType: value })}
               >
-                <SelectTrigger>
+                <SelectTrigger className="bg-background">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-popover border-border">
                   <SelectItem value="MERCHANT">商家</SelectItem>
                   <SelectItem value="CREATOR">达人</SelectItem>
                   <SelectItem value="STAFF">员工</SelectItem>

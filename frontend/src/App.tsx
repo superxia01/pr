@@ -4,11 +4,14 @@ import { ToastProvider } from './contexts/ToastContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import ErrorBoundary from './components/ErrorBoundary'
 import Login from './pages/Login'
+import DebugAuth from './pages/DebugAuth'
 import Dashboard from './pages/Dashboard'
 import InvitationCodes from './pages/InvitationCodes'
 import UserManagement from './pages/UserManagement'
 import MerchantInfo from './pages/MerchantInfo'
+import Merchants from './pages/Merchants'
 import ServiceProviderInfo from './pages/ServiceProviderInfo'
+import ServiceProviders from './pages/ServiceProviders'
 import CreatorProfile from './pages/CreatorProfile'
 import TaskHall from './pages/TaskHall'
 import MyTasks from './pages/MyTasks'
@@ -27,6 +30,7 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/debug-auth" element={<DebugAuth />} />
               <Route
                 path="/dashboard"
                 element={
@@ -60,10 +64,26 @@ function App() {
             }
           />
           <Route
+            path="/merchants"
+            element={
+              <ProtectedRoute>
+                <Merchants />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/service-provider"
             element={
               <ProtectedRoute>
                 <ServiceProviderInfo />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/service-providers"
+            element={
+              <ProtectedRoute>
+                <ServiceProviders />
               </ProtectedRoute>
             }
           />

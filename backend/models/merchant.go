@@ -10,12 +10,11 @@ import (
 // Merchant 商家模型
 type Merchant struct {
 	ID          uuid.UUID      `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
-	AdminID     uuid.UUID      `gorm:"type:uuid;not null;uniqueIndex" json:"adminId"`
+	AdminID     string         `gorm:"type:varchar(255);uniqueIndex" json:"adminId"`
 	ProviderID  uuid.UUID      `gorm:"type:uuid;not null;index" json:"providerId"`
-	UserID      uuid.UUID      `gorm:"type:uuid;not null;index" json:"userId"`
+	UserID      string         `gorm:"type:varchar(255);not null;index" json:"userId"`
 	Name        string         `gorm:"type:varchar(100);not null;index" json:"name"`
 	Description string         `gorm:"type:text" json:"description"`
-	LogoURL     string         `gorm:"type:varchar(500)" json:"logoUrl"`
 	Industry    string         `gorm:"type:varchar(50)" json:"industry"`
 	Status      string         `gorm:"type:varchar(20);not null;default:'active';check:status IN ('active', 'suspended', 'inactive');index" json:"status"`
 	CreatedAt   time.Time      `gorm:"not null;default:now()" json:"createdAt"`
@@ -45,7 +44,7 @@ func (m *Merchant) BeforeCreate(tx *gorm.DB) error {
 // MerchantStaff 商家员工模型
 type MerchantStaff struct {
 	ID         uuid.UUID    `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
-	UserID     uuid.UUID    `gorm:"type:uuid;not null;uniqueIndex" json:"userId"`
+	UserID     string       `gorm:"type:varchar(255);not null;uniqueIndex" json:"userId"`
 	MerchantID uuid.UUID    `gorm:"type:uuid;not null;index" json:"merchantId"`
 	Title      string       `gorm:"type:varchar(50)" json:"title"`
 	Status     string       `gorm:"type:varchar(20);not null;default:'active';check:status IN ('active', 'inactive');index" json:"status"`

@@ -10,7 +10,7 @@
 | 文档 | 说明 | 适用场景 |
 |------|------|---------|
 | **[部署指南](./DEPLOYMENT_GUIDE.md)** | 完整的部署流程和故障排查 | 首次部署、详细了解 |
-| **[部署 Checklist](./CHECKLIST.md)** | 部署检查清单 | 每次部署必看 |
+| **[部署检查清单](./DEPLOYMENT-CHECKLIST.md)** | 部署检查清单 | 每次部署必看 |
 | `deploy.sh` | 自动化部署脚本 | 日常部署 |
 
 ---
@@ -55,7 +55,7 @@ bash deploy/deploy.sh backend      # 仅后端
 
 ### 部署前检查清单
 
-使用 **[CHECKLIST.md](./CHECKLIST.md)** 确保以下项：
+使用 **[部署检查清单](./DEPLOYMENT-CHECKLIST.md)** 确保以下项：
 
 - [ ] 本地构建成功
 - [ ] 代码已提交
@@ -236,7 +236,7 @@ ssh shanghai-tencent "sudo rm -rf /var/www/pr-business /var/www/pr-business-fron
 - 遇到的问题
 - 部署结果
 
-**使用**：[CHECKLIST.md - 部署记录模板](./CHECKLIST.md#-部署记录模板)
+**使用**：[部署检查清单 - 部署记录模板](./DEPLOYMENT-CHECKLIST.md#-部署记录模板)
 
 ---
 
@@ -244,7 +244,7 @@ ssh shanghai-tencent "sudo rm -rf /var/www/pr-business /var/www/pr-business-fron
 
 - **[KeenChase 部署标准](../../keenchase-standards/deployment-and-operations.md)** - 通用部署规范
 - **[部署指南](./DEPLOYMENT_GUIDE.md)** - 详细部署流程
-- **[Checklist](./CHECKLIST.md)** - 部署检查清单
+- **[部署检查清单](./DEPLOYMENT-CHECKLIST.md)** - 部署检查清单
 - **[SSH 配置指南](../../keenchase-standards/ssh-setup.md)** - SSH 密钥配置
 - **[数据库使用指南](../../keenchase-standards/database-guide.md)** - 数据库连接
 

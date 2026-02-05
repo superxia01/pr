@@ -46,7 +46,7 @@ type Withdrawal struct {
 
 	// 关联
 	Account CreditAccount `gorm:"foreignKey:AccountID" json:"account,omitempty"`
-	Auditor *User         `gorm:"foreigner:AuditedBy;references:ID" json:"auditor,omitempty"`
+	// Auditor *User       `gorm:"foreignKey:AuditedBy;references:ID" json:"auditor,omitempty"`
 }
 
 // BeforeCreate GORM hook

@@ -24,6 +24,82 @@ export default function MerchantInfo() {
   const loadData = async () => {
     setLoading(true)
     setError(null)
+
+    // 🔴 开发模式：使用模拟数据
+    if (import.meta.env.DEV) {
+      setTimeout(() => {
+        const mockMerchant: any = {
+          id: 'mch_001',
+          name: '测试商家',
+          description: '这是一个测试商家',
+          logoUrl: '',
+          providerId: 'sp_001',
+          adminId: 'usr_001',
+          status: 'active',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          provider: {
+            id: 'sp_001',
+            name: '测试服务商',
+            adminId: 'usr_001',
+            userId: 'usr_001',
+            description: '测试服务商',
+            logoUrl: '',
+            status: 'active',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+          admin: {
+            id: 'usr_001',
+            nickname: '测试管理员',
+            authCenterUserId: '',
+            avatarUrl: '',
+            profile: {},
+            roles: [],
+            currentRole: '',
+            lastUsedRole: '',
+            status: 'active',
+            lastLoginAt: null,
+            lastLoginIp: '',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
+        }
+
+        const mockStaff: any[] = [
+          {
+            id: 'staff_001',
+            merchantId: 'mch_001',
+            userId: 'usr_002',
+            role: 'STAFF',
+            joinedAt: new Date().toISOString(),
+            user: {
+              id: 'usr_002',
+              nickname: '员工A',
+              authCenterUserId: '',
+              avatarUrl: '',
+              profile: {},
+              roles: [],
+              currentRole: '',
+              lastUsedRole: '',
+              status: 'active',
+              lastLoginAt: null,
+              lastLoginIp: '',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            },
+          },
+        ]
+
+        setMerchant(mockMerchant)
+        setStaff(mockStaff)
+        setLoading(false)
+        console.log('🔴 开发模式：使用模拟商家数据')
+      }, 500)
+      return
+    }
+
+    // 生产模式：调用真实 API
     try {
       const merchantData = await merchantApi.getMyMerchant()
       setMerchant(merchantData)

@@ -1,298 +1,223 @@
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getRoleName } from '../lib/roles'
-import MobileNav from '../components/MobileNav'
+import {
+  LayoutDashboard,
+  Gift,
+  Users,
+  Building2,
+  Briefcase,
+  Sparkles,
+  Coins,
+  Receipt,
+  ShieldCheck,
+  ArrowRight,
+} from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 
 export default function Dashboard() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
 
   const canManageInvitations = () => {
     const role = user?.currentRole
     return role === 'super_admin' || role === 'service_provider_admin' || role === 'merchant_admin'
   }
 
-  const isSuperAdmin = () => {
-    return user?.roles.includes('SUPER_ADMIN')
-  }
+  const isSuperAdmin = () => user?.roles.includes('SUPER_ADMIN')
+  const isMerchantAdmin = () => user?.roles.includes('MERCHANT_ADMIN')
+  const isServiceProviderAdmin = () => user?.roles.includes('SP_ADMIN')
+  const isCreator = () => user?.roles.includes('CREATOR')
+  const isMerchantStaff = () => user?.roles.includes('MERCHANT_STAFF')
 
-  const isMerchantAdmin = () => {
-    return user?.roles.includes('MERCHANT_ADMIN')
-  }
-
-  const isServiceProviderAdmin = () => {
-    return user?.roles.includes('SP_ADMIN')
-  }
-
-  const isCreator = () => {
-    return user?.roles.includes('CREATOR')
-  }
-
-  const isMerchantStaff = () => {
-    return user?.roles.includes('MERCHANT_STAFF')
-  }
+  const quickActions = [
+    // 达人相关
+    ...(isCreator() ? [{
+      title: '任务大厅',
+      description: '浏览和接受任务',
+      href: '/task-hall',
+      icon: Briefcase,
+      color: 'bg-blue-500',
+    }, {
+      title: '我的任务',
+      description: '管理已接任务',
+      href: '/my-tasks',
+      icon: Sparkles,
+      color: 'bg-purple-500',
+    }, {
+      title: '达人中心',
+      description: '查看个人资料',
+      href: '/creator',
+      icon: Sparkles,
+      color: 'bg-pink-500',
+    }] : []),
+    // 商家相关
+    ...(isMerchantAdmin() || isMerchantStaff() ? [{
+      title: '创建活动',
+      description: '发布营销活动',
+      href: '/create-campaign',
+      icon: Sparkles,
+      color: 'bg-indigo-500',
+    }] : []),
+    ...(isMerchantAdmin() ? [{
+      title: '商家信息',
+      description: '管理商家资料',
+      href: '/merchant',
+      icon: Building2,
+      color: 'bg-cyan-500',
+    }] : []),
+    // 服务商相关
+    ...(isServiceProviderAdmin() ? [{
+      title: '服务商信息',
+      description: '管理服务商资料',
+      href: '/service-provider',
+      icon: Building2,
+      color: 'bg-teal-500',
+    }] : []),
+    // 商家管理
+    ...(isSuperAdmin() || isServiceProviderAdmin() ? [{
+      title: '商家管理',
+      description: isSuperAdmin() ? '管理所有商家' : '管理我的商家',
+      href: '/merchants',
+      icon: Briefcase,
+      color: 'bg-indigo-500',
+    }] : []),
+    // 管理功能
+    ...(isSuperAdmin() ? [{
+      title: '服务商管理',
+      description: '管理服务商组织',
+      href: '/service-providers',
+      icon: Building2,
+      color: 'bg-cyan-500',
+    }, {
+      title: '用户管理',
+      description: '管理系统用户',
+      href: '/user-management',
+      icon: Users,
+      color: 'bg-red-500',
+    }] : []),
+    ...(canManageInvitations() ? [{
+      title: '邀请码管理',
+      description: '管理邀请码',
+      href: '/invitations',
+      icon: Gift,
+      color: 'bg-orange-500',
+    }] : []),
+    // 财务相关
+    {
+      title: '充值',
+      description: '账户充值',
+      href: '/recharge',
+      icon: Coins,
+      color: 'bg-green-500',
+    },
+    {
+      title: '提现记录',
+      description: '查看提现记录',
+      href: '/withdrawals',
+      icon: Receipt,
+      color: 'bg-emerald-500',
+    },
+    ...(isSuperAdmin() ? [{
+      title: '提现审核',
+      description: '审核提现申请',
+      href: '/withdrawal-review',
+      icon: ShieldCheck,
+      color: 'bg-amber-500',
+    }] : []),
+  ]
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* 顶部导航 */}
-      <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center gap-3">
-              {/* 移动端导航按钮 */}
-              <MobileNav onLogout={logout} />
-              <h1 className="text-lg sm:text-xl font-bold text-gray-900">PR Business</h1>
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* 欢迎标题 */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">
+          欢迎回来，{user?.nickname || '用户'}
+        </h1>
+        <p className="text-gray-500 mt-1">这是您的工作台，查看概览和快捷操作</p>
+      </div>
+
+      {/* 统计卡片 */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">当前角色</CardTitle>
+            <LayoutDashboard className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {user?.currentRole ? getRoleName(user.currentRole) : '未设置'}
             </div>
-            {/* 桌面端导航链接 */}
-            <div className="hidden md:flex items-center gap-2 lg:gap-4">
-              {canManageInvitations() && (
-                <a
-                  href="/invitations"
-                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  邀请码管理
-                </a>
+            {user?.currentRole && (
+              <p className="text-xs text-gray-500 mt-1">{user.currentRole}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">拥有角色数</CardTitle>
+            <Users className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{user?.roles.length || 0}</div>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {user?.roles.slice(0, 2).map((role) => (
+                <span key={role} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                  {getRoleName(role)}
+                </span>
+              ))}
+              {(user?.roles.length || 0) > 2 && (
+                <span className="text-xs text-gray-500">+{(user?.roles.length || 0) - 2}</span>
               )}
-              {isSuperAdmin() && (
-                <a
-                  href="/user-management"
-                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  用户管理
-                </a>
-              )}
-              {isMerchantAdmin() && (
-                <a
-                  href="/merchant"
-                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  商家信息
-                </a>
-              )}
-              {isServiceProviderAdmin() && (
-                <a
-                  href="/service-provider"
-                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  服务商信息
-                </a>
-              )}
-              {isCreator() && (
-                <a
-                  href="/creator"
-                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  达人中心
-                </a>
-              )}
-              {(isMerchantAdmin() || isMerchantStaff()) && (
-                <a
-                  href="/create-campaign"
-                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  创建活动
-                </a>
-              )}
-              {isCreator() && (
-                <>
-                  <a
-                    href="/task-hall"
-                    className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
-                    任务大厅
-                  </a>
-                  <a
-                    href="/my-tasks"
-                    className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                  >
-                    我的任务
-                  </a>
-                </>
-              )}
-              <a
-                href="/recharge"
-                className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                充值
-              </a>
-              <a
-                href="/credit-transactions"
-                className="px-3 lg:px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                积分明细
-              </a>
-              <a
-                href="/withdrawals"
-                className="px-3 lg:px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                提现记录
-              </a>
-              {isSuperAdmin() && (
-                <a
-                  href="/withdrawal-review"
-                  className="px-3 lg:px-4 py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
-                >
-                  提现审核
-                </a>
-              )}
-              <div className="h-6 w-px bg-gray-300 mx-2"></div>
-              <span className="text-sm text-gray-700 hidden lg:inline">
-                欢迎，{user?.nickname || '用户'}
-              </span>
-              <button
-                onClick={logout}
-                className="px-3 lg:px-4 py-2 text-sm text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                退出登录
-              </button>
             </div>
-            {/* 移动端用户信息 */}
-            <div className="flex md:hidden items-center gap-2">
-              <span className="text-sm text-gray-700 hidden sm:inline">
-                {user?.nickname || '用户'}
-              </span>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">用户ID</CardTitle>
+            <ShieldCheck className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm font-mono text-gray-600 truncate">
+              {user?.id}
             </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 快捷操作 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>快捷操作</CardTitle>
+          <CardDescription>常用功能快速入口</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {quickActions.map((action) => {
+              const Icon = action.icon
+              return (
+                <Link
+                  key={action.href}
+                  to={action.href}
+                  className="group flex items-start gap-4 p-4 rounded-lg border hover:border-gray-300 hover:bg-gray-50 transition-all"
+                >
+                  <div className={`${action.color} p-2 rounded-lg text-white`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                      {action.title}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-0.5">{action.description}</p>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" />
+                </Link>
+              )
+            })}
           </div>
-        </div>
-      </nav>
-
-      {/* 主要内容 */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">工作台</h2>
-
-          <div className="space-y-4">
-            <div className="p-4 bg-blue-50 rounded-lg">
-              <h3 className="font-medium text-blue-900">当前角色</h3>
-              <p className="text-blue-700 text-lg font-semibold">
-                {user?.currentRole ? getRoleName(user.currentRole) : '未设置'}
-              </p>
-              {user?.currentRole && (
-                <p className="text-blue-600 text-sm mt-1">({user.currentRole})</p>
-              )}
-            </div>
-
-            <div className="p-4 bg-green-50 rounded-lg">
-              <h3 className="font-medium text-green-900">拥有角色</h3>
-              <ul className="text-green-700 list-disc list-inside">
-                {user?.roles.map((role) => (
-                  <li key={role}>
-                    {getRoleName(role)} <span className="text-green-600">({role})</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            <div className="p-4 bg-purple-50 rounded-lg">
-              <h3 className="font-medium text-purple-900">用户ID</h3>
-              <p className="text-purple-700 text-sm">{user?.id}</p>
-            </div>
-
-            {/* 快捷操作 */}
-            <div className="p-4 bg-yellow-50 rounded-lg">
-              <h3 className="font-medium text-yellow-900 mb-3">快捷操作</h3>
-              <div className="space-y-2">
-                {canManageInvitations() && (
-                  <div>
-                    <a
-                      href="/invitations"
-                      className="text-yellow-700 hover:text-yellow-800 underline"
-                    >
-                      管理邀请码 →
-                    </a>
-                  </div>
-                )}
-                {isSuperAdmin() && (
-                  <div>
-                    <a
-                      href="/user-management"
-                      className="text-yellow-700 hover:text-yellow-800 underline"
-                    >
-                      用户管理 →
-                    </a>
-                  </div>
-                )}
-                {isMerchantAdmin() && (
-                  <div>
-                    <a
-                      href="/merchant"
-                      className="text-yellow-700 hover:text-yellow-800 underline"
-                    >
-                      商家信息管理 →
-                    </a>
-                  </div>
-                )}
-                {isServiceProviderAdmin() && (
-                  <div>
-                    <a
-                      href="/service-provider"
-                      className="text-yellow-700 hover:text-yellow-800 underline"
-                    >
-                      服务商信息管理 →
-                    </a>
-                  </div>
-                )}
-                {isCreator() && (
-                  <div>
-                    <a
-                      href="/creator"
-                      className="text-yellow-700 hover:text-yellow-800 underline"
-                    >
-                      达人个人中心 →
-                    </a>
-                  </div>
-                )}
-                {(isMerchantAdmin() || isMerchantStaff()) && (
-                  <div>
-                    <a
-                      href="/create-campaign"
-                      className="text-yellow-700 hover:text-yellow-800 underline"
-                    >
-                      创建营销活动 →
-                    </a>
-                  </div>
-                )}
-                {isCreator() && (
-                  <>
-                    <div>
-                      <a
-                        href="/task-hall"
-                        className="text-yellow-700 hover:text-yellow-800 underline"
-                      >
-                        任务大厅 →
-                      </a>
-                    </div>
-                    <div>
-                      <a
-                        href="/my-tasks"
-                        className="text-yellow-700 hover:text-yellow-800 underline"
-                      >
-                        我的任务 →
-                      </a>
-                    </div>
-                  </>
-                )}
-                <div>
-                  <a
-                    href="/withdrawals"
-                    className="text-yellow-700 hover:text-yellow-800 underline"
-                  >
-                    查看提现记录 →
-                  </a>
-                </div>
-                {isSuperAdmin() && (
-                  <div>
-                    <a
-                      href="/withdrawal-review"
-                      className="text-yellow-700 hover:text-yellow-800 underline"
-                    >
-                      审核提现申请 →
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
+        </CardContent>
+      </Card>
     </div>
   )
 }

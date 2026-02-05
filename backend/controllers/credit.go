@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"pr-business/models"
+	"pr-business/services"
 	"pr-business/utils"
 
 	"github.com/gin-gonic/gin"
@@ -13,11 +14,15 @@ import (
 )
 
 type CreditController struct {
-	db *gorm.DB
+	db                   *gorm.DB
+	permissionService    *services.AccountPermissionService
 }
 
 func NewCreditController(db *gorm.DB) *CreditController {
-	return &CreditController{db: db}
+	return &CreditController{
+		db:                db,
+		permissionService: services.NewAccountPermissionService(db),
+	}
 }
 
 // RechargeRequest 充值请求
@@ -42,31 +47,49 @@ func (ctrl *CreditController) GetAccountBalance(c *gin.Context) {
 	}
 	user := currentUser.(*models.User)
 
+	// 超级管理员使用个人账户
+	if utils.IsSuperAdmin(user) || utils.HasRole(user, "admin") {
+		parsedID, err := uuid.Parse(user.AuthCenterUserID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID格式错误"})
+			return
+		}
+
+		account, err := ctrl.findOrCreateAccount(parsedID, models.OwnerTypeUserPersonal, parsedID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询或创建账户失败"})
+			return
+		}
+
+		c.JSON(http.StatusOK, account)
+		return
+	}
+
 	// 确定账户类型
 	var ownerType models.OwnerType
 	var ownerID uuid.UUID
 
-	if utils.HasRole(user, "MERCHANT_ADMIN") {
+	if utils.IsMerchantAdmin(user) {
 		// 商家管理员：查找商家账户
 		var merchant models.Merchant
-		if err := ctrl.db.Where("admin_id = ?", user.ID).First(&merchant).Error; err != nil {
+		if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&merchant).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "商家信息不存在"})
 			return
 		}
 		ownerType = models.OwnerTypeOrgMerchant
 		ownerID = merchant.ID
-	} else if utils.HasRole(user, "SP_ADMIN") || utils.HasRole(user, "SP_STAFF") {
+	} else if utils.IsServiceProviderAdmin(user) || utils.IsServiceProviderStaff(user) {
 		// 服务商：查找服务商账户
 		var provider models.ServiceProvider
-		if utils.HasRole(user, "SP_ADMIN") {
-			if err := ctrl.db.Where("admin_id = ?", user.ID).First(&provider).Error; err != nil {
+		if utils.IsServiceProviderAdmin(user) {
+			if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&provider).Error; err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "服务商信息不存在"})
 				return
 			}
 		} else {
 			// 服务商员工
 			var providerStaff models.ServiceProviderStaff
-			if err := ctrl.db.Where("user_id = ?", user.ID).First(&providerStaff).Error; err != nil {
+			if err := ctrl.db.Where("user_id::text = ?", user.AuthCenterUserID).First(&providerStaff).Error; err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "员工信息不存在"})
 				return
 			}
@@ -77,11 +100,11 @@ func (ctrl *CreditController) GetAccountBalance(c *gin.Context) {
 		}
 		ownerType = models.OwnerTypeOrgProvider
 		ownerID = provider.ID
-	} else if utils.HasRole(user, "CREATOR") {
+	} else if utils.IsCreator(user) {
 		// 达人：个人账户
 		ownerType = models.OwnerTypeUserPersonal
-		// 使用user.ID作为ownerID
-		parsedID, err := uuid.Parse(user.ID)
+		// 使用user.AuthCenterUserID作为ownerID
+		parsedID, err := uuid.Parse(user.AuthCenterUserID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID格式错误"})
 			return
@@ -92,25 +115,18 @@ func (ctrl *CreditController) GetAccountBalance(c *gin.Context) {
 		return
 	}
 
-	// 查找或创建账户
-	var account models.CreditAccount
-	if err := ctrl.db.Where("owner_id = ? AND owner_type = ?", ownerID, ownerType).First(&account).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// 创建新账户
-			account = models.CreditAccount{
-				OwnerID:       ownerID,
-				OwnerType:     ownerType,
-				Balance:       0,
-				FrozenBalance: 0,
-			}
-			if err := ctrl.db.Create(&account).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "创建账户失败"})
-				return
-			}
-		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询账户失败"})
-			return
-		}
+	// 获取用户ID用于权限授予
+	userID, err := uuid.Parse(user.AuthCenterUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID格式错误"})
+		return
+	}
+
+	// 查找或创建账户（自动授予权限）
+	account, err := ctrl.findOrCreateAccount(ownerID, ownerType, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "查询或创建账户失败"})
+		return
 	}
 
 	c.JSON(http.StatusOK, account)
@@ -139,19 +155,38 @@ func (ctrl *CreditController) GetTransactions(c *gin.Context) {
 	var ownerType models.OwnerType
 	var ownerID uuid.UUID
 
-	if utils.HasRole(user, "MERCHANT_ADMIN") {
+	// 超级管理员使用个人账户
+	if utils.IsSuperAdmin(user) || utils.HasRole(user, "admin") {
+		ownerType = models.OwnerTypeUserPersonal
+		parsedID, err := uuid.Parse(user.AuthCenterUserID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID格式错误"})
+			return
+		}
+		ownerID = parsedID
+	} else if utils.IsMerchantAdmin(user) {
 		var merchant models.Merchant
-		ctrl.db.Where("admin_id = ?", user.ID).First(&merchant)
+		if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&merchant).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "商家信息不存在"})
+			return
+		}
 		ownerType = models.OwnerTypeOrgMerchant
 		ownerID = merchant.ID
-	} else if utils.HasRole(user, "SP_ADMIN") {
+	} else if utils.IsServiceProviderAdmin(user) {
 		var provider models.ServiceProvider
-		ctrl.db.Where("admin_id = ?", user.ID).First(&provider)
+		if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&provider).Error; err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "服务商信息不存在"})
+			return
+		}
 		ownerType = models.OwnerTypeOrgProvider
 		ownerID = provider.ID
-	} else if utils.HasRole(user, "CREATOR") {
+	} else if utils.IsCreator(user) {
 		ownerType = models.OwnerTypeUserPersonal
-		parsedID, _ := uuid.Parse(user.ID)
+		parsedID, err := uuid.Parse(user.AuthCenterUserID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID格式错误"})
+			return
+		}
 		ownerID = parsedID
 	} else {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无法确定账户类型"})
@@ -225,37 +260,34 @@ func (ctrl *CreditController) Recharge(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查：只有商家可以充值
-	if !utils.HasRole(user, "MERCHANT_ADMIN") {
+	if !utils.HasRole(user, "merchant_admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "只有商家可以充值"})
 		return
 	}
 
 	// 获取商家信息
 	var merchant models.Merchant
-	if err := ctrl.db.Where("admin_id = ?", user.ID).First(&merchant).Error; err != nil {
+	if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&merchant).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "商家信息不存在"})
 		return
 	}
 
-	// 获取账户
-	var account models.CreditAccount
-	if err := ctrl.db.Where("owner_id = ? AND owner_type = ?", merchant.ID, models.OwnerTypeOrgMerchant).First(&account).Error; err != nil {
+	// 获取用户ID用于权限授予
+	userID, err := uuid.Parse(user.AuthCenterUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID格式错误"})
+		return
+	}
+
+	// 获取或创建账户（自动授予权限）
+	account, err := ctrl.findOrCreateAccount(merchant.ID, models.OwnerTypeOrgMerchant, userID)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			// 创建新账户
-			account = models.CreditAccount{
-				OwnerID:       merchant.ID,
-				OwnerType:     models.OwnerTypeOrgMerchant,
-				Balance:       0,
-				FrozenBalance: 0,
-			}
-			if err := ctrl.db.Create(&account).Error; err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "创建账户失败"})
-				return
-			}
+			c.JSON(http.StatusNotFound, gin.H{"error": "账户不存在"})
 		} else {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询账户失败"})
-			return
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询或创建账户失败"})
 		}
+		return
 	}
 
 	// 开始事务
@@ -295,9 +327,134 @@ func (ctrl *CreditController) Recharge(c *gin.Context) {
 	})
 }
 
+// GetUserAccounts 获取用户可访问的所有账户
+// @Summary 获取用户可访问的所有账户
+// @Description 根据用户当前角色和权限，返回可访问的账户列表
+// @Tags 积分管理
+// @Accept json
+// @Produce json
+// @Success 200 {array} models.CreditAccount
+// @Router /api/v1/credit/accounts [get]
+func (ctrl *CreditController) GetUserAccounts(c *gin.Context) {
+	// 获取当前用户
+	currentUser, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未认证"})
+		return
+	}
+	user := currentUser.(*models.User)
+
+	// 解析用户ID
+	parsedID, err := uuid.Parse(user.AuthCenterUserID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID格式错误"})
+		return
+	}
+
+	// 从 account_permissions 表获取用户有权限访问的账户
+	var permissions []models.AccountPermission
+	if err := ctrl.db.Where("user_id = ?", parsedID).Find(&permissions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取账户权限失败"})
+		return
+	}
+
+	// 如果没有任何权限，返回空列表
+	if len(permissions) == 0 {
+		c.JSON(http.StatusOK, []models.CreditAccount{})
+		return
+	}
+
+	// 获取账户ID列表
+	accountIDs := make([]uuid.UUID, len(permissions))
+	for i, perm := range permissions {
+		accountIDs[i] = perm.AccountID
+	}
+
+	// 查询所有可访问的账户
+	var accounts []models.CreditAccount
+	if err := ctrl.db.Where("id IN ?", accountIDs).Find(&accounts).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取账户列表失败"})
+		return
+	}
+
+	// 为每个账户添加权限信息
+	type AccountWithPermission struct {
+		models.CreditAccount
+		CanView    bool `json:"canView"`
+		CanOperate bool `json:"canOperate"`
+	}
+
+	result := make([]AccountWithPermission, len(accounts))
+	permMap := make(map[uuid.UUID]models.AccountPermission)
+	for _, perm := range permissions {
+		permMap[perm.AccountID] = perm
+	}
+
+	for i, account := range accounts {
+		perm := permMap[account.ID]
+		result[i] = AccountWithPermission{
+			CreditAccount: account,
+			CanView:       perm.CanView,
+			CanOperate:    perm.CanOperate,
+		}
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 // 辅助函数：解析整型参数
 func parseIntParam(s string) (int, error) {
 	var result int
 	_, err := fmt.Sscanf(s, "%d", &result)
 	return result, err
+}
+
+// createAccountWithPermission 创建账户并自动授予权限
+func (ctrl *CreditController) createAccountWithPermission(ownerID uuid.UUID, ownerType models.OwnerType, userID uuid.UUID) (*models.CreditAccount, error) {
+	account := &models.CreditAccount{
+		OwnerID:       ownerID,
+		OwnerType:     ownerType,
+		UserID:        &userID,
+		Balance:       0,
+		FrozenBalance: 0,
+	}
+
+	if err := ctrl.db.Create(account).Error; err != nil {
+		return nil, err
+	}
+
+	// 根据账户类型授予权限
+	if ownerType == models.OwnerTypeUserPersonal {
+		// 个人账户：授予用户完整权限
+		if err := ctrl.permissionService.GrantPersonalAccountPermission(userID, account.ID); err != nil {
+			return nil, err
+		}
+	} else if ownerType == models.OwnerTypeOrgMerchant {
+		// 商家账户：授予管理员完整权限
+		if err := ctrl.permissionService.GrantMerchantAccountPermission(userID, account.ID, true); err != nil {
+			return nil, err
+		}
+	} else if ownerType == models.OwnerTypeOrgProvider {
+		// 服务商账户：授予管理员完整权限
+		if err := ctrl.permissionService.GrantProviderAccountPermission(userID, account.ID, true); err != nil {
+			return nil, err
+		}
+	}
+
+	return account, nil
+}
+
+// findOrCreateAccount 查找或创建账户（带权限）
+func (ctrl *CreditController) findOrCreateAccount(ownerID uuid.UUID, ownerType models.OwnerType, userID uuid.UUID) (*models.CreditAccount, error) {
+	var account models.CreditAccount
+	err := ctrl.db.Where("owner_id = ? AND owner_type = ?", ownerID, ownerType).First(&account).Error
+	if err == nil {
+		return &account, nil
+	}
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return ctrl.createAccountWithPermission(ownerID, ownerType, userID)
+	}
+
+	return nil, err
 }

@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { withdrawalApi } from '../services/api'
 import type { Withdrawal } from '../types'
+import { DataTable } from '../components/ui/data-table'
+import type { ColumnDef } from '../components/ui/data-table'
+import { Button } from '../components/ui/button'
 
 export default function WithdrawalReview() {
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(0) // DataTable使用0-based索引
   const [total, setTotal] = useState(0)
   const [filter, setFilter] = useState('')
   const [processingId, setProcessingId] = useState<string | null>(null)
@@ -21,7 +24,7 @@ export default function WithdrawalReview() {
     setError(null)
     try {
       const response = await withdrawalApi.getWithdrawals({
-        page,
+        page: page + 1, // API使用1-based索引
         page_size: pageSize,
         status: filter || undefined,
       })
@@ -100,6 +103,139 @@ export default function WithdrawalReview() {
     return iconMap[method] || '💳'
   }
 
+  // 定义表格列
+  const columns: ColumnDef<Withdrawal>[] = [
+    {
+      id: 'info',
+      header: '提现信息',
+      accessorKey: 'method',
+      cell: ({ row }) => {
+        const accountInfo =
+          typeof row.accountInfo === 'string'
+            ? JSON.parse(row.accountInfo)
+            : row.accountInfo
+
+        return (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">{getMethodIcon(row.method)}</span>
+              <div>
+                <div className="font-medium text-gray-900">
+                  {getMethodText(row.method)}提现
+                </div>
+                <div className="text-xs text-gray-500">
+                  {new Date(row.createdAt).toLocaleString()}
+                </div>
+              </div>
+            </div>
+            <div className="text-xs bg-gray-50 rounded p-2">
+              <div className="font-medium text-gray-700 mb-1">账户信息</div>
+              {Object.entries(accountInfo).map(([key, value]) => (
+                <div key={key} className="text-gray-600">
+                  <span className="text-gray-400">{key}:</span> {String(value)}
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      }
+    },
+    {
+      id: 'amount',
+      header: '金额信息',
+      accessorKey: 'amount',
+      cell: ({ row }) => (
+        <div className="text-sm space-y-1">
+          <div>
+            <span className="text-gray-500">申请:</span>{' '}
+            <span className="font-semibold">{row.amount.toLocaleString()}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">手续费:</span>{' '}
+            <span className="font-semibold">{row.fee.toLocaleString()}</span>
+          </div>
+          <div>
+            <span className="text-gray-500">到账:</span>{' '}
+            <span className="font-semibold text-green-600">{row.actualAmount.toLocaleString()}</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'status',
+      header: '状态',
+      accessorKey: 'status',
+      cell: ({ row }) => (
+        <div className="space-y-1">
+          <span
+            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(row.status)}`}
+          >
+            {getStatusText(row.status)}
+          </span>
+          {row.auditedAt && (
+            <div className="text-xs text-gray-500">
+              审核: {new Date(row.auditedAt).toLocaleDateString()}
+            </div>
+          )}
+          {row.completedAt && (
+            <div className="text-xs text-green-600">
+              完成: {new Date(row.completedAt).toLocaleDateString()}
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      id: 'actions',
+      header: '操作',
+      accessorKey: 'status',
+      cell: ({ row }) => (
+        <div className="flex flex-col gap-2">
+          {row.status === 'pending' && (
+            <>
+              <Button
+                size="sm"
+                onClick={() => handleAudit(row.id, true)}
+                disabled={processingId === row.id}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {processingId === row.id ? '处理中...' : '通过'}
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => {
+                  const note = prompt('请输入拒绝原因（可选）')
+                  if (note !== null) {
+                    handleAudit(row.id, false, note)
+                  }
+                }}
+                disabled={processingId === row.id}
+              >
+                拒绝
+              </Button>
+            </>
+          )}
+          {row.status === 'approved' && (
+            <Button
+              size="sm"
+              onClick={() => handleProcess(row.id)}
+              disabled={processingId === row.id}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {processingId === row.id ? '处理中...' : '确认打款'}
+            </Button>
+          )}
+          {row.auditNote && (
+            <div className="text-xs text-gray-500 mt-1">
+              备注: {row.auditNote}
+            </div>
+          )}
+        </div>
+      )
+    },
+  ]
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -112,198 +248,42 @@ export default function WithdrawalReview() {
 
           {/* 内容 */}
           <div className="p-6">
-            {loading && (
-              <div className="text-center py-12">
-                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                <p className="mt-2 text-gray-500">加载中...</p>
-              </div>
-            )}
-
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
                 {error}
               </div>
             )}
 
-            {!loading && withdrawals.length === 0 && (
-              <div className="text-center py-12 bg-gray-50 rounded-lg">
-                <p className="text-gray-500">暂无提现记录</p>
-              </div>
-            )}
+            {/* 筛选器 */}
+            <div className="mb-4">
+              <select
+                value={filter}
+                onChange={(e) => {
+                  setFilter(e.target.value)
+                  setPage(0) // 重置到第一页
+                }}
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm"
+              >
+                <option value="">全部状态</option>
+                <option value="pending">待审核</option>
+                <option value="approved">已通过</option>
+                <option value="rejected">已拒绝</option>
+                <option value="completed">已完成</option>
+              </select>
+            </div>
 
-            {!loading && withdrawals.length > 0 && (
-              <>
-                {/* 筛选器 */}
-                <div className="mb-4 flex gap-4">
-                  <select
-                    value={filter}
-                    onChange={(e) => {
-                      setFilter(e.target.value)
-                      setPage(1)
-                    }}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm"
-                  >
-                    <option value="">全部状态</option>
-                    <option value="pending">待审核</option>
-                    <option value="approved">已通过</option>
-                    <option value="rejected">已拒绝</option>
-                    <option value="completed">已完成</option>
-                  </select>
-                </div>
-
-                {/* 提现列表 */}
-                <div className="space-y-4">
-                  {withdrawals.map((withdrawal) => {
-                    const accountInfo =
-                      typeof withdrawal.accountInfo === 'string'
-                        ? JSON.parse(withdrawal.accountInfo)
-                        : withdrawal.accountInfo
-
-                    return (
-                      <div
-                        key={withdrawal.id}
-                        className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            {/* 头部信息 */}
-                            <div className="flex items-center gap-4 mb-3">
-                              <span className="text-2xl">{getMethodIcon(withdrawal.method)}</span>
-                              <div>
-                                <div className="font-medium text-gray-900">
-                                  {getMethodText(withdrawal.method)}提现
-                                </div>
-                                <div className="text-sm text-gray-500">
-                                  申请时间：{new Date(withdrawal.createdAt).toLocaleString()}
-                                </div>
-                              </div>
-                              <span
-                                className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(
-                                  withdrawal.status
-                                )}`}
-                              >
-                                {getStatusText(withdrawal.status)}
-                              </span>
-                            </div>
-
-                            {/* 金额信息 */}
-                            <div className="grid grid-cols-3 gap-4 mb-3">
-                              <div>
-                                <div className="text-xs text-gray-500">申请金额</div>
-                                <div className="text-lg font-semibold text-gray-900">
-                                  {withdrawal.amount.toLocaleString()} 积分
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-500">手续费</div>
-                                <div className="text-lg font-semibold text-gray-900">
-                                  {withdrawal.fee.toLocaleString()} 积分
-                                </div>
-                              </div>
-                              <div>
-                                <div className="text-xs text-gray-500">实际到账</div>
-                                <div className="text-lg font-semibold text-green-600">
-                                  {withdrawal.actualAmount.toLocaleString()} 积分
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* 账户信息 */}
-                            <div className="bg-gray-50 rounded p-3 mb-3">
-                              <div className="text-xs font-medium text-gray-700 mb-2">账户信息</div>
-                              <div className="grid grid-cols-2 gap-2 text-xs">
-                                {Object.entries(accountInfo).map(([key, value]) => (
-                                  <div key={key}>
-                                    <span className="text-gray-500">{key}: </span>
-                                    <span className="text-gray-900">{String(value)}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            {/* 审核信息 */}
-                            {withdrawal.auditedAt && (
-                              <div className="text-xs text-gray-500 mb-3">
-                                审核时间：{new Date(withdrawal.auditedAt).toLocaleString()}
-                                {withdrawal.auditNote && (
-                                  <span className="ml-2">备注：{withdrawal.auditNote}</span>
-                                )}
-                              </div>
-                            )}
-
-                            {/* 完成时间 */}
-                            {withdrawal.completedAt && (
-                              <div className="text-xs text-green-600 mb-3">
-                                完成时间：{new Date(withdrawal.completedAt).toLocaleString()}
-                              </div>
-                            )}
-                          </div>
-
-                          {/* 操作按钮 */}
-                          <div className="flex flex-col gap-2 ml-4">
-                            {withdrawal.status === 'pending' && (
-                              <>
-                                <button
-                                  onClick={() => handleAudit(withdrawal.id, true)}
-                                  disabled={processingId === withdrawal.id}
-                                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 text-sm"
-                                >
-                                  {processingId === withdrawal.id ? '处理中...' : '通过'}
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    const note = prompt('请输入拒绝原因（可选）')
-                                    if (note !== null) {
-                                      handleAudit(withdrawal.id, false, note)
-                                    }
-                                  }}
-                                  disabled={processingId === withdrawal.id}
-                                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 text-sm"
-                                >
-                                  拒绝
-                                </button>
-                              </>
-                            )}
-                            {withdrawal.status === 'approved' && (
-                              <button
-                                onClick={() => handleProcess(withdrawal.id)}
-                                disabled={processingId === withdrawal.id}
-                                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 text-sm"
-                              >
-                                {processingId === withdrawal.id ? '处理中...' : '确认打款'}
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* 分页 */}
-                {total > pageSize && (
-                  <div className="mt-6 flex justify-center items-center gap-4">
-                    <button
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      上一页
-                    </button>
-                    <span className="text-sm text-gray-600">
-                      第 {page} 页，共 {Math.ceil(total / pageSize)} 页
-                    </span>
-                    <button
-                      onClick={() => setPage((p) => p + 1)}
-                      disabled={page >= Math.ceil(total / pageSize)}
-                      className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      下一页
-                    </button>
-                  </div>
-                )}
-              </>
-            )}
+            {/* 表格 */}
+            <DataTable
+              columns={columns}
+              data={withdrawals}
+              serverSide={true}
+              total={total}
+              pageSize={pageSize}
+              onPageChange={(pageIndex) => setPage(pageIndex)}
+              loading={loading}
+              emptyMessage="暂无提现记录"
+              searchable={false}
+            />
           </div>
         </div>
       </div>

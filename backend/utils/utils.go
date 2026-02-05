@@ -47,30 +47,30 @@ func GetCurrentUser(c *gin.Context) (*models.User, bool) {
 
 // IsSuperAdmin 检查是否是超级管理员
 func IsSuperAdmin(user *models.User) bool {
-	return HasRole(user, "SUPER_ADMIN")
+	return HasRole(user, "super_admin")
 }
 
 // IsMerchantAdmin 检查是否是商家管理员
 func IsMerchantAdmin(user *models.User) bool {
-	return HasRole(user, "MERCHANT_ADMIN")
+	return HasRole(user, "merchant_admin")
 }
 
 // IsServiceProviderAdmin 检查是否是服务商管理员
 func IsServiceProviderAdmin(user *models.User) bool {
-	return HasRole(user, "SP_ADMIN")
+	return HasRole(user, "provider_admin")
 }
 
 // IsCreator 检查是否是达人
 func IsCreator(user *models.User) bool {
-	return HasRole(user, "CREATOR")
+	return HasRole(user, "creator")
 }
 
 // IsMerchantStaff 检查是否是商家员工
 func IsMerchantStaff(user *models.User) bool {
-	return HasRole(user, "MERCHANT_STAFF")
+	return HasRole(user, "merchant_staff")
 }
 
 // IsServiceProviderStaff 检查是否是服务商员工
 func IsServiceProviderStaff(user *models.User) bool {
-	return HasRole(user, "SP_STAFF")
+	return HasRole(user, "provider_staff")
 }

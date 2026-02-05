@@ -10,6 +10,12 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *config.Config) {
+	// 将 db 设置到全局上下文，供中间件使用
+	r.Use(func(c *gin.Context) {
+		c.Set("db", db)
+		c.Next()
+	})
+
 	// 初始化controllers
 	authController := controllers.NewAuthController(db, cfg)
 	invitationController := controllers.NewInvitationController(db, cfg)
@@ -19,7 +25,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 	campaignController := controllers.NewCampaignController(db)
 	taskController := controllers.NewTaskController(db)
 	creditController := controllers.NewCreditController(db)
-	withdrawalController := &controllers.WithdrawalController{DB: db}
+	withdrawalController := controllers.NewWithdrawalController(db)
 
 	// API路由组
 	v1 := r.Group("/api/v1")
@@ -27,8 +33,13 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 		// 认证路由（无需JWT验证）
 		auth := v1.Group("/auth")
 		{
+			// 微信登录重定向（GET）- 重定向到auth-center
+			auth.GET("/wechat/login", authController.WeChatLoginRedirect)
+			// 微信登录（POST）- 直接用code登录
 			auth.POST("/wechat", authController.WeChatLogin)
+			// 密码登录
 			auth.POST("/password", authController.PasswordLogin)
+			// 刷新令牌
 			auth.POST("/refresh", authController.RefreshToken)
 		}
 
@@ -62,8 +73,8 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 			protected.GET("/merchant/me", merchantController.GetMyMerchant)
 			protected.POST("/merchants/:id/staff", merchantController.AddMerchantStaff)
 			protected.GET("/merchants/:id/staff", merchantController.GetMerchantStaff)
-			protected.PUT("/merchants/:merchant_id/staff/:staff_id/permissions", merchantController.UpdateMerchantStaffPermission)
-			protected.DELETE("/merchants/:merchant_id/staff/:staff_id", merchantController.DeleteMerchantStaff)
+			protected.PUT("/merchants/:id/staff/:staff_id/permissions", merchantController.UpdateMerchantStaffPermission)
+			protected.DELETE("/merchants/:id/staff/:staff_id", merchantController.DeleteMerchantStaff)
 
 			// 服务商管理
 			protected.POST("/service-providers", serviceProviderController.CreateServiceProvider)
@@ -74,8 +85,8 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 			protected.GET("/service-provider/me", serviceProviderController.GetMyServiceProvider)
 			protected.POST("/service-providers/:id/staff", serviceProviderController.AddServiceProviderStaff)
 			protected.GET("/service-providers/:id/staff", serviceProviderController.GetServiceProviderStaff)
-			protected.PUT("/service-providers/:provider_id/staff/:staff_id/permissions", serviceProviderController.UpdateServiceProviderStaffPermission)
-			protected.DELETE("/service-providers/:provider_id/staff/:staff_id", serviceProviderController.DeleteServiceProviderStaff)
+			protected.PUT("/service-providers/:id/staff/:staff_id/permissions", serviceProviderController.UpdateServiceProviderStaffPermission)
+			protected.DELETE("/service-providers/:id/staff/:staff_id", serviceProviderController.DeleteServiceProviderStaff)
 
 			// 达人管理
 			protected.GET("/creators", creatorController.GetCreators)
@@ -106,6 +117,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 			protected.POST("/tasks/:id/audit", taskController.AuditTask)
 
 			// 积分管理
+			protected.GET("/credit/accounts", creditController.GetUserAccounts)
 			protected.GET("/credit/balance", creditController.GetAccountBalance)
 			protected.GET("/credit/transactions", creditController.GetTransactions)
 			protected.POST("/credit/recharge", creditController.Recharge)

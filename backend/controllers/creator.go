@@ -66,7 +66,7 @@ func (ctrl *CreatorController) GetCreators(c *gin.Context) {
 	// 邀请人过滤
 	if inviterID := c.Query("inviter_id"); inviterID != "" {
 		// 如果是服务商员工，只能看到自己邀请的达人
-		if utils.HasRole(user, "SP_STAFF") {
+		if utils.HasRole(user, "provider_staff") {
 			if inviterID != user.ID {
 				c.JSON(http.StatusForbidden, gin.H{"error": "无权限查看其他员工邀请的达人"})
 				return
@@ -152,7 +152,7 @@ func (ctrl *CreatorController) UpdateCreator(c *gin.Context) {
 
 	// 权限检查：达人本人或管理员可以更新
 	isCreator := user.ID == creator.UserID.String()
-	isAdmin := utils.HasRole(user, "SUPER_ADMIN") || utils.HasRole(user, "SP_ADMIN") || utils.HasRole(user, "SP_STAFF")
+	isAdmin := utils.HasRole(user, "super_admin") || utils.HasRole(user, "provider_admin") || utils.HasRole(user, "provider_staff")
 
 	if !isCreator && !isAdmin {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限更新达人信息"})
@@ -382,7 +382,7 @@ func (ctrl *CreatorController) BreakInviterRelationship(c *gin.Context) {
 
 	// 权限检查：只有达人本人或管理员可以解除关系
 	isCreator := user.ID == creator.UserID.String()
-	isAdmin := utils.HasRole(user, "SUPER_ADMIN")
+	isAdmin := utils.HasRole(user, "super_admin")
 
 	if !isCreator && !isAdmin {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限解除邀请关系"})

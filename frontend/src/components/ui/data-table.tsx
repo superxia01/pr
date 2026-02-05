@@ -48,6 +48,11 @@ type DataTableProps<T> = {
   onCellUpdate?: (rowId: string, field: string, value: any) => void
   emptyMessage?: string
   className?: string
+  // 服务端分页支持
+  serverSide?: boolean
+  total?: number
+  onPageChange?: (pageIndex: number, pageSize: number) => void
+  loading?: boolean
 }
 
 export function DataTable<T>({
@@ -60,6 +65,10 @@ export function DataTable<T>({
   onCellUpdate,
   emptyMessage = "暂无数据",
   className,
+  serverSide = false,
+  total,
+  onPageChange,
+  loading = false,
 }: DataTableProps<T>) {
   const [search, setSearch] = useState("")
   const [pagination, setPagination] = useState<PaginationState>({
@@ -73,8 +82,18 @@ export function DataTable<T>({
   // 编辑状态
   const [editingCell, setEditingCell] = useState<{ rowId: string; field: string } | null>(null)
 
-  // 计算过滤后的数据
+  // 处理分页变化
+  const handlePaginationChange = (newPagination: PaginationState) => {
+    setPagination(newPagination)
+    if (serverSide && onPageChange) {
+      onPageChange(newPagination.pageIndex, newPagination.pageSize)
+    }
+  }
+
+  // 客户端模式：计算过滤后的数据
   const filteredData = useMemo(() => {
+    if (serverSide) return data // 服务端模式不过滤
+
     return data.filter((item) => {
       // 全局搜索
       if (search) {
@@ -106,10 +125,12 @@ export function DataTable<T>({
 
       return true
     })
-  }, [data, search, filterColumn, filterValue, columns])
+  }, [data, search, filterColumn, filterValue, columns, serverSide])
 
-  // 排序
+  // 客户端模式：排序
   const sortedData = useMemo(() => {
+    if (serverSide) return data // 服务端模式不排序
+
     if (!sorting) return filteredData
 
     return [...filteredData].sort((a, b) => {
@@ -130,15 +151,18 @@ export function DataTable<T>({
       const comparison = (aValue ?? 0) > (bValue ?? 0) ? 1 : -1
       return sorting.desc ? -comparison : comparison
     })
-  }, [filteredData, sorting, columns])
+  }, [filteredData, sorting, columns, serverSide, data])
 
-  // 分页
+  // 客户端模式：分页
   const paginatedData = useMemo(() => {
+    if (serverSide) return data // 服务端模式直接使用传入的数据
+
     const start = pagination.pageIndex * pagination.pageSize
     return sortedData.slice(start, start + pagination.pageSize)
-  }, [sortedData, pagination])
+  }, [sortedData, pagination, serverSide, data])
 
-  const totalPages = Math.ceil(sortedData.length / pagination.pageSize)
+  // 计算总页数
+  const totalPages = Math.ceil((serverSide ? total || 0 : sortedData.length) / pagination.pageSize)
 
   // 获取单元格值
   const getCellValue = (row: T, column: ColumnDef<T>) => {
@@ -196,8 +220,8 @@ export function DataTable<T>({
 
   return (
     <div className={cn("space-y-4", className)}>
-      {/* 搜索和过滤 */}
-      {searchable && (
+      {/* 搜索和过滤 - 仅客户端模式 */}
+      {!serverSide && searchable && (
         <div className="flex items-center gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -276,7 +300,18 @@ export function DataTable<T>({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {paginatedData.length === 0 ? (
+            {loading ? (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-24 text-center"
+                >
+                  <div className="flex items-center justify-center">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : paginatedData.length === 0 ? (
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
@@ -350,7 +385,7 @@ export function DataTable<T>({
       {/* 分页 */}
       <div className="flex items-center justify-between px-2">
         <div className="text-sm text-muted-foreground">
-          共 {sortedData.length} 条记录
+          共 {serverSide ? total || 0 : sortedData.length} 条记录
         </div>
 
         <div className="flex items-center space-x-6 lg:space-x-8">
@@ -359,13 +394,14 @@ export function DataTable<T>({
             <select
               value={pagination.pageSize}
               onChange={(e) =>
-                setPagination({
+                handlePaginationChange({
                   ...pagination,
                   pageSize: Number(e.target.value),
                   pageIndex: 0,
                 })
               }
               className="h-8 w-[70px] rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              disabled={loading}
             >
               {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>
@@ -384,12 +420,12 @@ export function DataTable<T>({
               variant="outline"
               size="sm"
               onClick={() =>
-                setPagination({
+                handlePaginationChange({
                   ...pagination,
                   pageIndex: Math.max(0, pagination.pageIndex - 1),
                 })
               }
-              disabled={pagination.pageIndex === 0}
+              disabled={pagination.pageIndex === 0 || loading}
             >
               上一页
             </Button>
@@ -397,12 +433,12 @@ export function DataTable<T>({
               variant="outline"
               size="sm"
               onClick={() =>
-                setPagination({
+                handlePaginationChange({
                   ...pagination,
                   pageIndex: Math.min(totalPages - 1, pagination.pageIndex + 1),
                 })
               }
-              disabled={pagination.pageIndex >= totalPages - 1}
+              disabled={pagination.pageIndex >= totalPages - 1 || loading}
             >
               下一页
             </Button>

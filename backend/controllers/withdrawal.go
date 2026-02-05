@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -13,11 +14,21 @@ import (
 	"gorm.io/gorm"
 
 	"pr-business/models"
+	"pr-business/services"
 	"pr-business/utils"
 )
 
 type WithdrawalController struct {
-	DB *gorm.DB
+	DB                *gorm.DB
+	permissionService *services.AccountPermissionService
+}
+
+// NewWithdrawalController 创建提现控制器
+func NewWithdrawalController(db *gorm.DB) *WithdrawalController {
+	return &WithdrawalController{
+		DB:                db,
+		permissionService: services.NewAccountPermissionService(db),
+	}
 }
 
 // CreateWithdrawalRequest 申请提现请求
@@ -35,7 +46,12 @@ type AuditWithdrawalRequest struct {
 
 // CreateWithdrawal 申请提现
 func (ctrl *WithdrawalController) CreateWithdrawal(c *gin.Context) {
-	user := c.MustGet("user").(*models.User)
+	currentUser, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未认证"})
+		return
+	}
+	user := currentUser.(*models.User)
 
 	var req CreateWithdrawalRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -45,25 +61,33 @@ func (ctrl *WithdrawalController) CreateWithdrawal(c *gin.Context) {
 
 	// 1. 确定用户的积分账户类型
 	var accountType models.OwnerType
-	if utils.HasRole(user, "SUPER_ADMIN") {
-		accountType = models.OwnerTypeOrgProvider // 超管默认使用服务商账户
-	} else if utils.HasRole(user, "SP_ADMIN") {
+	if utils.IsSuperAdmin(user) || utils.HasRole(user, "admin") {
+		accountType = models.OwnerTypeUserPersonal // 超管使用个人账户
+	} else if utils.IsServiceProviderAdmin(user) {
 		accountType = models.OwnerTypeOrgProvider
-	} else if utils.HasRole(user, "MERCHANT_ADMIN") || utils.HasRole(user, "MERCHANT_STAFF") {
+	} else if utils.IsMerchantAdmin(user) || utils.IsMerchantStaff(user) {
 		accountType = models.OwnerTypeOrgMerchant
-	} else {
+	} else if utils.IsCreator(user) {
 		accountType = models.OwnerTypeUserPersonal
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无法确定账户类型"})
+		return
 	}
 
 	// 2. 获取或创建积分账户
-	var account models.CreditAccount
-	err := ctrl.DB.Where("owner_id = ? AND owner_type = ?", user.ID, accountType).First(&account).Error
+	parsedID, err := uuid.Parse(user.AuthCenterUserID)
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "积分账户不存在"})
-			return
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID格式错误"})
+		return
+	}
+
+	account, err := ctrl.findOrCreateAccount(parsedID, accountType, parsedID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "账户不存在"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "查询或创建账户失败"})
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get account"})
 		return
 	}
 
@@ -151,7 +175,12 @@ func (ctrl *WithdrawalController) CreateWithdrawal(c *gin.Context) {
 
 // GetWithdrawals 获取提现记录列表
 func (ctrl *WithdrawalController) GetWithdrawals(c *gin.Context) {
-	user := c.MustGet("user").(*models.User)
+	currentUser, exists := c.Get("user")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "未认证"})
+		return
+	}
+	user := currentUser.(*models.User)
 
 	// 分页参数
 	page := c.DefaultQuery("page", "1")
@@ -164,19 +193,33 @@ func (ctrl *WithdrawalController) GetWithdrawals(c *gin.Context) {
 	query := ctrl.DB.Model(&models.Withdrawal{})
 
 	// 超管可以查看所有记录，其他用户只能查看自己的记录
-	if !utils.HasRole(user, "SUPER_ADMIN") {
+	if !utils.IsSuperAdmin(user) && !utils.HasRole(user, "admin") {
 		// 需要先获取用户的积分账户ID
 		var accountType models.OwnerType
-		if utils.HasRole(user, "SP_ADMIN") {
+		if utils.IsServiceProviderAdmin(user) {
 			accountType = models.OwnerTypeOrgProvider
-		} else if utils.HasRole(user, "MERCHANT_ADMIN") || utils.HasRole(user, "MERCHANT_STAFF") {
+		} else if utils.IsMerchantAdmin(user) || utils.IsMerchantStaff(user) {
 			accountType = models.OwnerTypeOrgMerchant
-		} else {
+		} else if utils.IsCreator(user) {
 			accountType = models.OwnerTypeUserPersonal
+		} else {
+			c.JSON(http.StatusOK, gin.H{
+				"withdrawals": []models.Withdrawal{},
+				"total":       0,
+			})
+			return
 		}
 
 		var account models.CreditAccount
-		if err := ctrl.DB.Where("owner_id = ? AND owner_type = ?", user.ID, accountType).First(&account).Error; err != nil {
+		parsedID, err := uuid.Parse(user.AuthCenterUserID)
+		if err != nil {
+			c.JSON(http.StatusOK, gin.H{
+				"withdrawals": []models.Withdrawal{},
+				"total":       0,
+			})
+			return
+		}
+		if err := ctrl.DB.Where("owner_id = ? AND owner_type = ?", parsedID, accountType).First(&account).Error; err != nil {
 			c.JSON(http.StatusOK, gin.H{
 				"withdrawals": []models.Withdrawal{},
 				"total":       0,
@@ -234,7 +277,12 @@ func (ctrl *WithdrawalController) GetWithdrawal(c *gin.Context) {
 		}
 
 		var account models.CreditAccount
-		if err := ctrl.DB.Where("owner_id = ? AND owner_type = ?", user.ID, accountType).First(&account).Error; err != nil {
+		parsedID, err := uuid.Parse(user.AuthCenterUserID)
+		if err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权访问此记录"})
+			return
+		}
+		if err := ctrl.DB.Where("owner_id = ? AND owner_type = ?", parsedID, accountType).First(&account).Error; err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "无权访问此记录"})
 			return
 		}
@@ -449,4 +497,46 @@ func parseInt(s string) int {
 	var result int
 	fmt.Sscanf(s, "%d", &result)
 	return result
+}
+
+// findOrCreateAccount 查找或创建账户（带权限）
+func (ctrl *WithdrawalController) findOrCreateAccount(ownerID uuid.UUID, ownerType models.OwnerType, userID uuid.UUID) (*models.CreditAccount, error) {
+	var account models.CreditAccount
+	err := ctrl.DB.Where("owner_id = ? AND owner_type = ?", ownerID, ownerType).First(&account).Error
+	if err == nil {
+		return &account, nil
+	}
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		account := &models.CreditAccount{
+			OwnerID:       ownerID,
+			OwnerType:     ownerType,
+			UserID:        &userID,
+			Balance:       0,
+			FrozenBalance: 0,
+		}
+
+		if err := ctrl.DB.Create(account).Error; err != nil {
+			return nil, err
+		}
+
+		// 根据账户类型授予权限
+		if ownerType == models.OwnerTypeUserPersonal {
+			if err := ctrl.permissionService.GrantPersonalAccountPermission(userID, account.ID); err != nil {
+				return nil, err
+			}
+		} else if ownerType == models.OwnerTypeOrgMerchant {
+			if err := ctrl.permissionService.GrantMerchantAccountPermission(userID, account.ID, true); err != nil {
+				return nil, err
+			}
+		} else if ownerType == models.OwnerTypeOrgProvider {
+			if err := ctrl.permissionService.GrantProviderAccountPermission(userID, account.ID, true); err != nil {
+				return nil, err
+			}
+		}
+
+		return account, nil
+	}
+
+	return nil, err
 }

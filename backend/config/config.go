@@ -12,37 +12,36 @@ import (
 )
 
 type Config struct {
-	AppEnv     string
-	AppPort    string
-	AppName    string
-	AppDebug  bool
+	AppEnv     string `mapstructure:"APP_ENV"`
+	AppPort    string `mapstructure:"APP_PORT"`
+	AppName    string `mapstructure:"APP_NAME"`
+	AppDebug  bool   `mapstructure:"APP_DEBUG"`
 
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-	SSLMode    string
+	DBHost     string `mapstructure:"DB_HOST"`
+	DBPort     string `mapstructure:"DB_PORT"`
+	DBUser     string `mapstructure:"DB_USER"`
+	DBPassword string `mapstructure:"DB_PASSWORD"`
+	DBName     string `mapstructure:"DB_NAME"`
+	SSLMode    string `mapstructure:"DB_SSLMODE"`
 
-	RedisHost     string
-	RedisPort     string
-	RedisPassword string
-	RedisDB       int
+	RedisHost     string `mapstructure:"REDIS_HOST"`
+	RedisPort     string `mapstructure:"REDIS_PORT"`
+	RedisPassword string `mapstructure:"REDIS_PASSWORD"`
+	RedisDB       int    `mapstructure:"REDIS_DB"`
 
-	JWTSecret               string
-	JWTAccessTokenExpire   time.Duration
-	JWTRefreshTokenExpire  time.Duration
+	JWTSecret               string `mapstructure:"JWT_SECRET"`
+	JWTAccessTokenExpire   time.Duration `mapstructure:"JWT_ACCESS_TOKEN_EXPIRE"`
+	JWTRefreshTokenExpire  time.Duration `mapstructure:"JWT_REFRESH_TOKEN_EXPIRE"`
 
-	AuthCenterURL        string
-	AuthCenterAPIKey      string
-	AuthCenterRedirectURI string
+	AuthCenterURL        string `mapstructure:"AUTH_CENTER_URL"`
+	AuthCenterAPIKey      string `mapstructure:"AUTH_CENTER_API_KEY"`
+	AuthCenterRedirectURI string `mapstructure:"AUTH_CENTER_REDIRECT_URI"`
 
-	FrontendURL string
+	FrontendURL string `mapstructure:"FRONTEND_URL"`
 }
 
 func Load() *Config {
-	viper.SetConfigName(".env")
-	viper.AddConfigPath(".")
+	viper.SetConfigFile(".env")
 	viper.AutomaticEnv()
 
 	// 设置默认值
@@ -57,6 +56,10 @@ func Load() *Config {
 	if err := viper.Unmarshal(&cfg); err != nil {
 		log.Fatal("Failed to unmarshal config:", err)
 	}
+
+	// 调试输出
+	log.Printf("Config loaded: DB_HOST=%s, DB_PORT=%s, DB_USER=%s, DB_NAME=%s",
+		cfg.DBHost, cfg.DBPort, cfg.DBUser, cfg.DBName)
 
 	return &cfg
 }

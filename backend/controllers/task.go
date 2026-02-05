@@ -313,8 +313,8 @@ func (ctrl *TaskController) AuditTask(c *gin.Context) {
 		task.Status = models.TaskStatusRejected
 	}
 
-	// 将 user.ID (string) 转换为 uuid.UUID
-	auditorID, err := uuid.Parse(user.ID)
+	// 将 user.AuthCenterUserID (string) 转换为 uuid.UUID
+	auditorID, err := uuid.Parse(user.AuthCenterUserID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID格式错误"})
 		return

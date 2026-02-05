@@ -62,13 +62,49 @@ api.interceptors.request.use((config) => {
 })
 
 // 响应拦截器 - 处理token过期
+let isRefreshing = false
+let failedQueue: Array<{
+  resolve: (value?: any) => void
+  reject: (reason?: any) => void
+}> = []
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+  failedQueue = []
+}
+
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiError>) => {
-    if (error.response?.status === 401) {
-      // Token过期，尝试刷新
+    const originalRequest = error.config as any
+
+    // 如果是 401 错误且不是刷新 token 的请求本身
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // 如果正在刷新，将请求加入队列
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        }).then((token) => {
+          if (token) {
+            originalRequest.headers.Authorization = `Bearer ${token}`
+          }
+          return api(originalRequest)
+        }).catch((err) => {
+          return Promise.reject(err)
+        })
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
       const refreshToken = localStorage.getItem('refreshToken')
-      if (refreshToken) {
+      if (refreshToken && refreshToken !== 'null' && refreshToken !== '') {
         try {
           const response = await axios.post<LoginResponse>(
             `${API_BASE_URL}/api/v1/auth/refresh`,
@@ -76,22 +112,38 @@ api.interceptors.response.use(
           )
           const { accessToken } = response.data
           localStorage.setItem('accessToken', accessToken)
-          // 重试原请求
-          if (error.config) {
-            error.config.headers.Authorization = `Bearer ${accessToken}`
-            return api.request(error.config)
-          }
+
+          // 处理队列中的请求
+          processQueue(null, accessToken)
+
+          // 重试原请求（只重试一次）
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`
+          return api(originalRequest)
         } catch (refreshError) {
-          // 刷新失败，清除token并跳转登录
+          // 刷新失败，清除 token 并跳转登录
+          processQueue(refreshError, null)
           localStorage.removeItem('accessToken')
           localStorage.removeItem('refreshToken')
           localStorage.removeItem('user')
           window.location.href = '/login'
+          return Promise.reject(refreshError)
+        } finally {
+          isRefreshing = false
         }
       } else {
-        // 没有refreshToken，跳转登录
+        // 没有 refreshToken，清除登录状态并跳转登录
+        processQueue(error, null)
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+        localStorage.removeItem('user')
         window.location.href = '/login'
       }
+    } else if (error.response?.status === 401 && originalRequest._retry) {
+      // 已经重试过但仍然 401，说明刷新后的 token 也无效，直接跳转登录
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
     }
     return Promise.reject(error)
   }
@@ -499,7 +551,7 @@ export const creditApi = {
   },
 
   // 获取积分流水
-  getTransactions: async (params?: { page?: number; page_size?: number }) => {
+  getTransactions: async (params?: { page?: number; page_size?: number; type?: string }) => {
     const response = await api.get<TransactionsResponse>('/api/v1/credit/transactions', { params })
     return response.data
   },

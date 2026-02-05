@@ -10,7 +10,7 @@ export default function MyTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<string>('')
+  const [filter, setFilter] = useState<string>('ALL')
   const [submitModalOpen, setSubmitModalOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [platformUrl, setPlatformUrl] = useState('')
@@ -21,10 +21,125 @@ export default function MyTasks() {
   }, [filter])
 
   const loadTasks = async () => {
+    // 🔴 开发模式：使用模拟数据
+    if (import.meta.env.DEV) {
+      setTimeout(() => {
+        const mockTasks: any[] = [
+          {
+            id: 'task_001',
+            campaignId: 'campaign_001',
+            creatorId: 'usr_001',
+            platform: 'xiaohongshu',
+            contentType: 'POST',
+            status: 'ASSIGNED',
+            dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            campaign: {
+              id: 'campaign_001',
+              title: '春季新品推广活动',
+              merchantId: 'mch_001',
+              providerId: 'sp_001',
+              requirements: '需要发布小红书图文，至少200字，3张图片',
+              platforms: 'xiaohongshu',
+              taskAmount: 100,
+              campaignAmount: 50000,
+              creatorAmount: 100,
+              staffReferralAmount: 10,
+            },
+            requirements: {
+              minWords: 200,
+              minImages: 3,
+              hashtags: ['春季', '新品', '推荐'],
+            },
+          },
+          {
+            id: 'task_002',
+            campaignId: 'campaign_002',
+            creatorId: 'usr_001',
+            platform: 'douyin',
+            contentType: 'VIDEO',
+            status: 'SUBMITTED',
+            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            campaign: {
+              id: 'campaign_002',
+              title: '品牌短视频挑战',
+              merchantId: 'mch_002',
+              providerId: 'sp_001',
+              requirements: '制作品牌相关短视频，时长至少30秒',
+              platforms: 'douyin',
+              taskAmount: 50,
+              campaignAmount: 30000,
+              creatorAmount: 200,
+              staffReferralAmount: 20,
+            },
+            requirements: {
+              minDuration: 30,
+              hashtags: ['品牌', '挑战'],
+            },
+            submission: {
+              id: 'sub_001',
+              platformUrl: 'https://douyin.com/video/123',
+              notes: '已完成视频创作',
+              submittedAt: new Date().toISOString(),
+            },
+          },
+          {
+            id: 'task_003',
+            campaignId: 'campaign_001',
+            creatorId: 'usr_001',
+            platform: 'xiaohongshu',
+            contentType: 'POST',
+            status: 'APPROVED',
+            dueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+            createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+            updatedAt: new Date().toISOString(),
+            campaign: {
+              id: 'campaign_001',
+              title: '春季新品推广活动',
+              merchantId: 'mch_001',
+              providerId: 'sp_001',
+              requirements: '需要发布小红书图文，至少200字，3张图片',
+              platforms: 'xiaohongshu',
+              taskAmount: 100,
+              campaignAmount: 50000,
+              creatorAmount: 100,
+              staffReferralAmount: 10,
+            },
+            requirements: {
+              minWords: 200,
+              minImages: 3,
+            },
+            submission: {
+              id: 'sub_002',
+              platformUrl: 'https://xiaohongshu.com/post/456',
+              notes: '已发布',
+              submittedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
+              reviewedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+            },
+          },
+        ]
+
+        // 根据筛选条件过滤
+        let filteredTasks = mockTasks
+        if (filter && filter !== 'ALL') {
+          filteredTasks = mockTasks.filter(task => task.status === filter)
+        }
+
+        setTasks(filteredTasks)
+        setLoading(false)
+        console.log('🔴 开发模式：使用模拟任务数据', filteredTasks.length, '条')
+      }, 500)
+      return
+    }
+
+    // 生产模式：调用真实 API
     setLoading(true)
     setError(null)
     try {
-      const params = filter ? { status: filter } : undefined
+      const params = filter && filter !== 'ALL' ? { status: filter } : undefined
       const response = await taskApi.getMyTasks(params)
       setTasks(response)
     } catch (err: any) {
@@ -104,11 +219,11 @@ export default function MyTasks() {
               <p className="mt-1 text-sm text-gray-500">管理您接取的任务</p>
             </div>
             <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-[180px]">
+              <SelectTrigger className="w-[180px] bg-background">
                 <SelectValue placeholder="全部状态" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">全部状态</SelectItem>
+              <SelectContent className="bg-popover border-border">
+                <SelectItem value="ALL">全部状态</SelectItem>
                 <SelectItem value="ASSIGNED">已接取</SelectItem>
                 <SelectItem value="SUBMITTED">已提交</SelectItem>
                 <SelectItem value="APPROVED">已通过</SelectItem>

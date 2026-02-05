@@ -6,7 +6,6 @@ import (
 	"pr-business/utils"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -20,23 +19,20 @@ func NewServiceProviderController(db *gorm.DB) *ServiceProviderController {
 
 // CreateServiceProviderRequest 创建服务商请求
 type CreateServiceProviderRequest struct {
-	UserID      uuid.UUID `json:"userId" binding:"required"`
-	Name        string    `json:"name" binding:"required,min=1,max=100"`
-	Description string    `json:"description"`
-	LogoURL     string    `json:"logoUrl"`
+	Name        string `json:"name" binding:"required,min=1,max=100"`
+	Description string `json:"description"`
 }
 
 // UpdateServiceProviderRequest 更新服务商请求
 type UpdateServiceProviderRequest struct {
 	Name        string `json:"name" binding:"omitempty,min=1,max=100"`
 	Description string `json:"description"`
-	LogoURL     string `json:"logoUrl"`
 	Status      string `json:"status" binding:"omitempty,oneof=active suspended inactive"`
 }
 
 // AddServiceProviderStaffRequest 添加服务商员工请求
 type AddServiceProviderStaffRequest struct {
-	UserID      uuid.UUID   `json:"userId" binding:"required"`
+	UserID      string   `json:"userId" binding:"required"`
 	Title       string      `json:"title" binding:"omitempty,max=50"`
 	Permissions []string    `json:"permissions" binding:"required"`
 }
@@ -72,32 +68,16 @@ func (ctrl *ServiceProviderController) CreateServiceProvider(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查：只有超级管理员可以创建服务商
-	if !utils.HasRole(user, "SUPER_ADMIN") {
+	if !utils.HasRole(user, "super_admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限创建服务商"})
 		return
 	}
 
-	// 检查用户是否存在
-	var targetUser models.User
-	if err := ctrl.db.Where("id = ?", req.UserID).First(&targetUser).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "用户不存在"})
-		return
-	}
-
-	// 检查该用户是否已经是服务商管理员
-	var existingProvider models.ServiceProvider
-	if err := ctrl.db.Where("admin_id = ?", req.UserID).First(&existingProvider).Error; err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "该用户已经是服务商管理员"})
-		return
-	}
-
-	// 创建服务商
+	// 创建服务商（admin_id 暂时为空，后续通过邀请码绑定管理员）
 	provider := models.ServiceProvider{
-		AdminID:     req.UserID,
-		UserID:      req.UserID,
+		UserID:      user.ID, // 记录创建者
 		Name:        req.Name,
 		Description: req.Description,
-		LogoURL:     req.LogoURL,
 		Status:      "active",
 	}
 
@@ -106,15 +86,8 @@ func (ctrl *ServiceProviderController) CreateServiceProvider(c *gin.Context) {
 		return
 	}
 
-	// 为用户添加 SP_ADMIN 角色
-	if !utils.HasRole(&targetUser, "SP_ADMIN") {
-		targetUser.Roles = append(targetUser.Roles, "SP_ADMIN")
-		ctrl.db.Save(&targetUser)
-	}
-
 	c.JSON(http.StatusOK, provider)
 }
-
 // GetServiceProviders 获取服务商列表
 // @Summary 获取服务商列表
 // @Description 获取服务商列表，支持过滤
@@ -195,8 +168,8 @@ func (ctrl *ServiceProviderController) UpdateServiceProvider(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查
-	hasPermission := utils.HasRole(user, "SUPER_ADMIN") ||
-		(utils.HasRole(user, "SP_ADMIN") && user.ID == provider.AdminID.String())
+	hasPermission := utils.HasRole(user, "super_admin") ||
+		(utils.HasRole(user, "provider_admin") && user.ID == provider.AdminID)
 
 	if !hasPermission {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限更新服务商信息"})
@@ -210,9 +183,6 @@ func (ctrl *ServiceProviderController) UpdateServiceProvider(c *gin.Context) {
 	}
 	if req.Description != "" {
 		updates["description"] = req.Description
-	}
-	if req.LogoURL != "" {
-		updates["logo_url"] = req.LogoURL
 	}
 	if req.Status != "" {
 		updates["status"] = req.Status
@@ -253,7 +223,7 @@ func (ctrl *ServiceProviderController) DeleteServiceProvider(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查：只有超级管理员可以删除
-	if !utils.HasRole(user, "SUPER_ADMIN") {
+	if !utils.HasRole(user, "super_admin") {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限删除服务商"})
 		return
 	}
@@ -300,7 +270,7 @@ func (ctrl *ServiceProviderController) AddServiceProviderStaff(c *gin.Context) {
 	}
 
 	// 权限检查：只有服务商管理员可以添加员工
-	if !utils.HasRole(user, "SUPER_ADMIN") && provider.AdminID.String() != user.ID {
+	if !utils.HasRole(user, "super_admin") && provider.AdminID != user.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限添加员工"})
 		return
 	}
@@ -408,7 +378,7 @@ func (ctrl *ServiceProviderController) UpdateServiceProviderStaffPermission(c *g
 	}
 
 	// 权限检查：只有服务商管理员可以更新员工权限
-	if !utils.HasRole(user, "SUPER_ADMIN") && provider.AdminID.String() != user.ID {
+	if !utils.HasRole(user, "super_admin") && provider.AdminID != user.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限更新员工权限"})
 		return
 	}
@@ -469,7 +439,7 @@ func (ctrl *ServiceProviderController) DeleteServiceProviderStaff(c *gin.Context
 	}
 
 	// 权限检查：只有服务商管理员可以删除员工
-	if !utils.HasRole(user, "SUPER_ADMIN") && provider.AdminID.String() != user.ID {
+	if !utils.HasRole(user, "super_admin") && provider.AdminID != user.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限删除员工"})
 		return
 	}
