@@ -32,8 +32,8 @@ export default function RoleSwitcher() {
         'SUPER_ADMIN': 'super_admin',
         'MERCHANT_ADMIN': 'merchant_admin',
         'MERCHANT_STAFF': 'merchant_staff',
-        'SP_ADMIN': 'service_provider_admin',
-        'SP_STAFF': 'service_provider_staff',
+        'SP_ADMIN': 'provider_admin',
+        'SP_STAFF': 'provider_staff',
         'CREATOR': 'creator',
       }
 
@@ -82,7 +82,7 @@ export default function RoleSwitcher() {
           {user.roles.map((role) => {
             const isActive = role === 'SUPER_ADMIN' && user.currentRole === 'super_admin' ||
                            role === 'MERCHANT_ADMIN' && user.currentRole === 'merchant_admin' ||
-                           role === 'SP_ADMIN' && user.currentRole === 'service_provider_admin' ||
+                           role === 'SP_ADMIN' && user.currentRole === 'provider_admin' ||
                            role === 'CREATOR' && user.currentRole === 'creator'
 
             return (

@@ -93,7 +93,7 @@ export default function InvitationCodes() {
 
   const canCreateCode = () => {
     const role = user?.currentRole
-    return role === 'super_admin' || role === 'service_provider_admin' || role === 'merchant_admin'
+    return role === 'super_admin' || role === 'provider_admin' || role === 'merchant_admin'
   }
 
   // DataTable列定义
