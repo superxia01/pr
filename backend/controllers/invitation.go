@@ -323,3 +323,147 @@ func (ctrl *InvitationController) canCreateInvitationCode(currentRole, codeType,
 		return false
 	}
 }
+
+// GetMyFixedInvitationCodes 获取我的固定邀请码列表
+// 返回基于用户所有角色可邀请的角色类型及其对应的邀请码
+// GET /api/v1/invitations/fixed-codes
+	userID := c.GetString("userId")
+	rolesInterface, _ := c.Get("roles")
+
+	// 将 interface{} 转换为 []string
+	var roles []string
+	if rolesSlice, ok := rolesInterface.([]string); ok {
+		roles = rolesSlice
+	}
+
+	// 获取用户信息
+	var user models.User
+	if err := ctrl.db.Where("id = ?", userID).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户信息失败"})
+		return
+	}
+
+	// 收集所有可邀请的角色（去重）
+	invitableRoleMap := make(map[string]constants.InvitableRole)
+	for _, role := range roles {
+		invitableRoles := constants.GetInvitableRoles(role)
+		for _, ir := range invitableRoles {
+			invitableRoleMap[ir.Role] = ir
+		}
+	}
+
+	if len(invitableRoleMap) == 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"invitableRoles": []interface{}{},
+			"userRoles":      roles,
+		})
+		return
+	}
+
+	// 获取可用的组织（服务商和商家）
+	type OrganizationInfo struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+		Type string `json:"type"`
+	}
+
+	organizations := make([]OrganizationInfo, 0)
+
+	isSuperAdmin := utils.IsSuperAdmin(&user)
+
+	// 超级管理员：获取所有服务商和商家（用于生成邀请码邀请别人成为管理员）
+	// 其他角色：获取自己是管理员的服务商/商家
+	var serviceProviders []models.ServiceProvider
+	if isSuperAdmin {
+		// 超级管理员：返回所有服务商
+		if err := ctrl.db.Model(&models.ServiceProvider{}).Find(&serviceProviders).Error; err == nil {
+			for _, sp := range serviceProviders {
+				organizations = append(organizations, OrganizationInfo{
+					ID:   sp.ID.String(),
+					Name: sp.Name,
+					Type: "service_provider",
+				})
+			}
+		}
+	} else {
+		// 服务商管理员：返回自己是管理员的服务商
+		if err := ctrl.db.Where("admin_id = ?", userID).Find(&serviceProviders).Error; err == nil {
+			for _, sp := range serviceProviders {
+				organizations = append(organizations, OrganizationInfo{
+					ID:   sp.ID.String(),
+					Name: sp.Name,
+					Type: "service_provider",
+				})
+			}
+		}
+	}
+
+	var merchants []models.Merchant
+	if isSuperAdmin {
+		// 超级管理员：返回所有商家
+		if err := ctrl.db.Model(&models.Merchant{}).Find(&merchants).Error; err == nil {
+			for _, m := range merchants {
+				organizations = append(organizations, OrganizationInfo{
+					ID:   m.ID.String(),
+					Name: m.Name,
+					Type: "merchant",
+				})
+			}
+		}
+	} else {
+		// 商家管理员：返回自己是管理员的商家
+		if err := ctrl.db.Where("admin_id = ?", userID).Find(&merchants).Error; err == nil {
+			for _, m := range merchants {
+				organizations = append(organizations, OrganizationInfo{
+					ID:   m.ID.String(),
+					Name: m.Name,
+					Type: "merchant",
+				})
+			}
+		}
+	}
+
+	// 为每个可邀请的角色生成对应的邀请码
+	type InvitationCodeWithRole struct {
+		Role          string                `json:"role"`
+		Label         string                `json:"label"`
+		Organizations []OrganizationInfo     `json:"organizations,omitempty"`
+		NeedOrg       bool                  `json:"needOrg"`
+	}
+
+	codes := make([]InvitationCodeWithRole, 0, len(invitableRoleMap))
+	for _, ir := range invitableRoleMap {
+		needOrg := utils.RequiresOrganizationBinding(ir.Role)
+
+		codeInfo := InvitationCodeWithRole{
+			Role:    ir.Role,
+			Label:   ir.Label,
+			NeedOrg: needOrg,
+		}
+
+		if needOrg {
+			// 需要组织绑定：返回组织列表供选择
+			filteredOrgs := make([]OrganizationInfo, 0)
+			orgType := utils.GetOrganizationTypeByRole(ir.Role)
+
+			for _, org := range organizations {
+				if org.Type == orgType {
+					filteredOrgs = append(filteredOrgs, org)
+				}
+			}
+			codeInfo.Organizations = filteredOrgs
+			codeInfo.Code = "" // 需要选择组织后才能生成
+		} else {
+			// 不需要组织绑定（如达人）：直接生成邀请码
+			codeInfo.Code = utils.GenerateFixedInvitationCode(userID, ir.Role)
+		}
+
+		codes = append(codes, codeInfo)
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"invitableRoles": codes,
+		"userRoles":      roles,
+		"organizations":  organizations,
+	})
+}
