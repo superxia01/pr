@@ -9,7 +9,7 @@ import { Label } from '../components/ui/label'
 import { Card, CardContent, CardHeader } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://pr.crazyaigc.com'
 
 export default function Login() {
   const [loginType, setLoginType] = useState<'wechat' | 'password'>('wechat')
@@ -22,105 +22,55 @@ export default function Login() {
   // 处理微信登录回调
   useEffect(() => {
     const token = searchParams.get('token')
-    const refreshToken = searchParams.get('refreshToken')
-    const userId = searchParams.get('userId')
-    const code = searchParams.get('code')
 
-    // 情况1：微信内登录（直接有 token）
-    if (token && userId) {
-      setLoading(true)
-      fetch(`${API_BASE_URL}/api/v1/user/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-        .then(res => res.json())
-        .then(data => {
-          login(
-            token,
-            refreshToken || '',
-            {
-              ...data,
-              profile: data.profile || {},
-              roles: data.roles || [],
-            }
-          )
-          navigate('/dashboard', { replace: true })
-        })
-        .catch(() => {
-          login(
-            token,
-            refreshToken || '',
-            {
-              id: userId,
-              authCenterUserId: '',
-              nickname: '微信用户',
-              avatarUrl: '',
-              profile: {},
-              roles: [],
-              currentRole: '',
-              lastUsedRole: '',
-              status: 'active',
-              lastLoginAt: new Date().toISOString(),
-              lastLoginIp: '',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            }
-          )
-          navigate('/dashboard', { replace: true })
-        })
-        .finally(() => {
-          setLoading(false)
-        })
+    // auth-center 回调：用 auth-center token 换取 pr-business token
+    if (!token) {
+      // 没有 token，不处理回调
       return
     }
 
-    // 情况2：PC扫码登录（需要用 code 换 token）
-    if (code) {
-      setLoading(true)
-      fetch(`${API_BASE_URL}/api/v1/auth/wechat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ authCode: code }),
-      })
+    setLoading(true)
+    // 调用后端接口，用 auth-center token 换取 pr-business token
+    fetch(`${API_BASE_URL}/api/v1/auth/token/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          setError(data.error)
+          return
+        }
+        // 用 pr-business token 获取完整用户信息
+        return fetch(`${API_BASE_URL}/api/v1/user/me`, {
+          headers: {
+            'Authorization': `Bearer ${data.accessToken}`,
+          },
+        })
         .then(res => res.json())
-        .then(data => {
-          if (data.error) {
-            setError(data.error)
-            return
-          }
-          // 保存 token
+        .then(userData => {
           login(
             data.accessToken,
             data.refreshToken || '',
             {
-              id: data.userId,
-              authCenterUserId: '',
-              nickname: data.nickname || '微信用户',
-              avatarUrl: data.avatarUrl || '',
-              profile: {},
+              ...userData,
+              profile: userData.profile || {},
               roles: data.roles || [],
-              currentRole: data.currentRole || '',
-              lastUsedRole: '',
-              status: 'active',
-              lastLoginAt: new Date().toISOString(),
-              lastLoginIp: '',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
             }
           )
           navigate('/dashboard', { replace: true })
         })
-        .catch((err) => {
-          setError(err.response?.data?.error || '登录失败，请重试')
-        })
-        .finally(() => {
-          setLoading(false)
-        })
-      return
-    }
+      })
+      .catch((err) => {
+        console.error('登录失败:', err)
+        setError(err.response?.data?.error || '登录失败，请重试')
+      })
+      .finally(() => {
+        setLoading(false)
+      })
   }, [searchParams, login, navigate])
 
   const handleWeChatLogin = () => {
@@ -160,6 +110,7 @@ export default function Login() {
           status: 'active',
           lastLoginAt: new Date().toISOString(),
           lastLoginIp: '',
+          fixedInvitationCode: '',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }

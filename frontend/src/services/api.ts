@@ -8,9 +8,10 @@ import type {
   User,
   ApiError,
   InvitationCode,
-  CreateInvitationCodeRequest,
   UseInvitationCodeRequest,
   UseInvitationCodeResponse,
+  GetMyInvitationsResponse,
+  InvitableRole,
   Merchant,
   CreateMerchantRequest,
   UpdateMerchantRequest,
@@ -34,15 +35,19 @@ import type {
   AuditTaskRequest,
   TasksResponse,
   CreditAccount,
+  CreditAccountWithPermission,
   TransactionsResponse,
   RechargeRequest,
   Withdrawal,
   CreateWithdrawalRequest,
   AuditWithdrawalRequest,
   WithdrawalsResponse,
+  GenerateTaskInvitationCodeRequest,
+  GenerateTaskInvitationCodeResponse,
+  ValidateTaskInvitationCodeResponse,
 } from '../types'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://pr.crazyaigc.com'
 
 // 创建axios实例
 const api = axios.create({
@@ -190,20 +195,36 @@ export const authApi = {
 
 // 邀请码API
 export const invitationApi = {
-  // 创建邀请码
-  createInvitationCode: async (data: CreateInvitationCodeRequest) => {
-    const response = await api.post<InvitationCode>('/api/v1/invitations', data)
+  // 获取我的固定邀请码列表（人邀请人）
+  getMyFixedInvitationCodes: async () => {
+    const response = await api.get<{ invitableRoles: InvitableRole[]; currentRole: string }>(
+      '/api/v1/invitations/fixed-codes'
+    )
     return response.data
   },
 
-  // 获取邀请码列表
+  // 获取邀请码列表（旧版兼容）
   listInvitationCodes: async (params?: {
-    codeType?: string
-    ownerId?: string
-    status?: string
+    type?: string
+    targetRole?: string
+    generatorType?: string
+    isActive?: boolean
   }) => {
-    const response = await api.get<{ codes: InvitationCode[]; total: number }>(
+    const response = await api.get<{ invitationCodes: InvitationCode[]; total: number }>(
       '/api/v1/invitations',
+      { params }
+    )
+    return response.data
+  },
+
+  // 获取我的邀请列表
+  getMyInvitations: async (params?: {
+    page?: number
+    page_size?: number
+    inviteeRole?: string
+  }) => {
+    const response = await api.get<GetMyInvitationsResponse>(
+      '/api/v1/invitations/my',
       { params }
     )
     return response.data
@@ -435,9 +456,9 @@ export const creatorApi = {
     return response.data
   },
 
-  // 获取当前用户的达人资料
+  // 获取当前用户的达人资料（有达人角色但无档案时返回 { needSetup: true }）
   getMyCreatorProfile: async () => {
-    const response = await api.get<Creator>('/api/v1/creator/me')
+    const response = await api.get<Creator | { needSetup: true }>('/api/v1/creator/me')
     return response.data
   },
 
@@ -507,8 +528,10 @@ export const taskApi = {
 
   // 获取我的任务
   getMyTasks: async (params?: { status?: string }) => {
-    const response = await api.get<Task[]>('/api/v1/tasks/my', { params })
-    return response.data
+    const response = await api.get<{ tasks: Task[]; needCreatorSetup?: boolean } | Task[]>('/api/v1/tasks/my', { params })
+    const data = response.data
+    if (Array.isArray(data)) return { tasks: data }
+    return data
   },
 
   // 获取待审核任务
@@ -544,19 +567,25 @@ export const taskApi = {
 
 // 积分API
 export const creditApi = {
-  // 获取积分余额
+  // 获取当前角色对应的积分余额（单账户）
   getBalance: async () => {
     const response = await api.get<CreditAccount>('/api/v1/credit/balance')
     return response.data
   },
 
-  // 获取积分流水
+  // 获取当前用户有权限访问的所有积分账户列表（含 canView/canOperate）
+  getUserAccounts: async () => {
+    const response = await api.get<CreditAccountWithPermission[]>('/api/v1/credit/accounts')
+    return response.data
+  },
+
+  // 获取积分流水（分页）
   getTransactions: async (params?: { page?: number; page_size?: number; type?: string }) => {
     const response = await api.get<TransactionsResponse>('/api/v1/credit/transactions', { params })
     return response.data
   },
 
-  // 充值
+  // 充值（仅商家管理员）
   recharge: async (data: RechargeRequest) => {
     const response = await api.post<{ message: string; account: CreditAccount }>(
       '/api/v1/credit/recharge',
@@ -602,6 +631,35 @@ export const withdrawalApi = {
   processWithdrawal: async (id: string) => {
     const response = await api.post<{ message: string; withdrawal: Withdrawal }>(
       `/api/v1/withdrawals/${id}/process`
+    )
+    return response.data
+  },
+}
+
+// 任务邀请API
+export const taskInvitationApi = {
+  // 生成任务邀请码
+  generateInvitationCode: async (data: GenerateTaskInvitationCodeRequest) => {
+    const response = await api.post<GenerateTaskInvitationCodeResponse>(
+      '/api/v1/task-invitations/generate',
+      data
+    )
+    return response.data
+  },
+
+  // 验证任务邀请码
+  validateInvitationCode: async (code: string) => {
+    const response = await api.get<ValidateTaskInvitationCodeResponse>(
+      `/api/v1/task-invitations/validate/${code}`
+    )
+    return response.data
+  },
+
+  // 使用营销活动邀请码（登录后调用：自动获得达人角色、绑定邀请人、绑定活动商家/服务商）
+  useTaskInvitationCode: async (code: string) => {
+    const response = await api.post<{ message: string; campaign: any; invitationCode: any }>(
+      '/api/v1/task-invitations/use',
+      { code }
     )
     return response.data
   },
