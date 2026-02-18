@@ -1,17 +1,12 @@
 import axios, { AxiosError } from 'axios'
 import type {
-  LoginRequest,
-  PasswordLoginRequest,
-  LoginResponse,
-  RefreshTokenRequest,
-  SwitchRoleRequest,
   User,
   ApiError,
   InvitationCode,
   UseInvitationCodeRequest,
   UseInvitationCodeResponse,
   GetMyInvitationsResponse,
-  InvitableRole,
+  GetMyFixedInvitationCodesResponse,
   Merchant,
   CreateMerchantRequest,
   UpdateMerchantRequest,
@@ -66,87 +61,13 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// 响应拦截器 - 处理token过期
-let isRefreshing = false
-let failedQueue: Array<{
-  resolve: (value?: any) => void
-  reject: (reason?: any) => void
-}> = []
-
-const processQueue = (error: any, token: string | null = null) => {
-  failedQueue.forEach((prom) => {
-    if (error) {
-      prom.reject(error)
-    } else {
-      prom.resolve(token)
-    }
-  })
-  failedQueue = []
-}
-
+// 响应拦截器 - 简化版，401直接跳转登录
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError<ApiError>) => {
-    const originalRequest = error.config as any
-
-    // 如果是 401 错误且不是刷新 token 的请求本身
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      // 如果正在刷新，将请求加入队列
-      if (isRefreshing) {
-        return new Promise((resolve, reject) => {
-          failedQueue.push({ resolve, reject })
-        }).then((token) => {
-          if (token) {
-            originalRequest.headers.Authorization = `Bearer ${token}`
-          }
-          return api(originalRequest)
-        }).catch((err) => {
-          return Promise.reject(err)
-        })
-      }
-
-      originalRequest._retry = true
-      isRefreshing = true
-
-      const refreshToken = localStorage.getItem('refreshToken')
-      if (refreshToken && refreshToken !== 'null' && refreshToken !== '') {
-        try {
-          const response = await axios.post<LoginResponse>(
-            `${API_BASE_URL}/api/v1/auth/refresh`,
-            { refreshToken }
-          )
-          const { accessToken } = response.data
-          localStorage.setItem('accessToken', accessToken)
-
-          // 处理队列中的请求
-          processQueue(null, accessToken)
-
-          // 重试原请求（只重试一次）
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`
-          return api(originalRequest)
-        } catch (refreshError) {
-          // 刷新失败，清除 token 并跳转登录
-          processQueue(refreshError, null)
-          localStorage.removeItem('accessToken')
-          localStorage.removeItem('refreshToken')
-          localStorage.removeItem('user')
-          window.location.href = '/login'
-          return Promise.reject(refreshError)
-        } finally {
-          isRefreshing = false
-        }
-      } else {
-        // 没有 refreshToken，清除登录状态并跳转登录
-        processQueue(error, null)
-        localStorage.removeItem('accessToken')
-        localStorage.removeItem('refreshToken')
-        localStorage.removeItem('user')
-        window.location.href = '/login'
-      }
-    } else if (error.response?.status === 401 && originalRequest._retry) {
-      // 已经重试过但仍然 401，说明刷新后的 token 也无效，直接跳转登录
+    // 401错误：token无效或过期，直接跳转登录
+    if (error.response?.status === 401) {
       localStorage.removeItem('accessToken')
-      localStorage.removeItem('refreshToken')
       localStorage.removeItem('user')
       window.location.href = '/login'
     }
@@ -156,48 +77,18 @@ api.interceptors.response.use(
 
 // 认证API
 export const authApi = {
-  // 微信登录
-  wechatLogin: async (data: LoginRequest) => {
-    const response = await api.post<LoginResponse>('/api/v1/auth/wechat', data)
-    return response.data
-  },
-
-  // 密码登录
-  passwordLogin: async (data: PasswordLoginRequest) => {
-    const response = await api.post<LoginResponse>('/api/v1/auth/password', data)
-    return response.data
-  },
-
-  // 刷新令牌
-  refreshToken: async (data: RefreshTokenRequest) => {
-    const response = await api.post<{ accessToken: string; expiresIn: number }>(
-      '/api/v1/auth/refresh',
-      data
-    )
-    return response.data
-  },
-
-  // 切换角色
-  switchRole: async (data: SwitchRoleRequest) => {
-    const response = await api.post<{ accessToken: string; currentRole: string; lastUsedRole: string }>(
-      '/api/v1/user/switch-role',
-      data
-    )
-    return response.data
-  },
-
-  // 获取当前用户
+  // 获取当前用户信息
   getCurrentUser: async () => {
-    const response = await api.get<User>('/api/v1/user/me')
-    return response.data
+    const response = await api.get<{ success: boolean; data: User }>('/api/v1/user/me')
+    return response.data.data
   },
 }
 
 // 邀请码API
 export const invitationApi = {
-  // 获取我的固定邀请码列表（人邀请人）
+  // 获取我的固定邀请码列表（后端预生成）
   getMyFixedInvitationCodes: async () => {
-    const response = await api.get<{ invitableRoles: InvitableRole[]; currentRole: string }>(
+    const response = await api.get<GetMyFixedInvitationCodesResponse>(
       '/api/v1/invitations/fixed-codes'
     )
     return response.data
@@ -253,7 +144,6 @@ export const invitationApi = {
     return response.data
   },
 }
-
 // 商家API
 export const merchantApi = {
   // 创建商家
@@ -327,6 +217,12 @@ export const merchantApi = {
     const response = await api.delete<{ message: string }>(
       `/api/v1/merchants/${merchantId}/staff/${staffId}`
     )
+    return response.data
+  },
+
+  // 获取权限列表
+  getPermissions: async () => {
+    const response = await api.get<any[]>('/api/v1/merchants/permissions')
     return response.data
   },
 }
@@ -404,6 +300,12 @@ export const serviceProviderApi = {
     const response = await api.delete<{ message: string }>(
       `/api/v1/service-providers/${providerId}/staff/${staffId}`
     )
+    return response.data
+  },
+
+  // 获取权限列表
+  getPermissions: async () => {
+    const response = await api.get<any[]>('/api/v1/service-providers/permissions')
     return response.data
   },
 }
@@ -504,6 +406,16 @@ export const campaignApi = {
   // 删除营销活动
   deleteCampaign: async (id: string) => {
     const response = await api.delete<{ message: string }>(`/api/v1/campaigns/${id}`)
+    return response.data
+  },
+
+  // 审核并发布营销活动
+  approveCampaign: async (id: string, data: {
+    creatorAmount: number
+    staffReferralAmount: number
+    providerAmount: number
+  }) => {
+    const response = await api.post<Campaign>(`/api/v1/campaigns/${id}/approve`, data)
     return response.data
   },
 }

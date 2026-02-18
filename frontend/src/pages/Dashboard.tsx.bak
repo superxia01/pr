@@ -1,0 +1,236 @@
+import { Link } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+import { getRoleName } from '../lib/roles'
+import {
+  LayoutDashboard,
+  Gift,
+  Users,
+  Building2,
+  Briefcase,
+  Sparkles,
+  Coins,
+  Receipt,
+  ShieldCheck,
+  ArrowRight,
+} from 'lucide-react'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
+import { Button } from '../components/ui/button'
+import { Input } from '../components/ui/input'
+import { invitationApi } from '../services/api'
+
+export default function Dashboard() {
+  const { user } = useAuth()
+
+  // 邀请码输入相关状态
+  const [invitationCode, setInvitationCode] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState(false)
+
+  // 多角色：按「拥有的角色」显示所有对应快捷操作（与侧边栏一致）
+  const roles = user?.roles ?? []
+  const isSuperAdmin = () => roles.some((r) => r.toUpperCase() === 'SUPER_ADMIN')
+  const isMerchantAdmin = () => roles.some((r) => r.toUpperCase() === 'MERCHANT_ADMIN')
+  const isServiceProviderAdmin = () => roles.some((r) => r.toUpperCase() === 'SERVICE_PROVIDER_ADMIN')
+  const isCreator = () => roles.some((r) => r.toUpperCase() === 'CREATOR')
+  const isMerchantStaff = () => roles.some((r) => r.toUpperCase() === 'MERCHANT_STAFF')
+
+  const canManageInvitations = () => {
+    return isSuperAdmin() || isServiceProviderAdmin() || isMerchantAdmin()
+  }
+
+  // 检查用户是否已使用邀请码
+  const hasUsedInvitationCode = () => {
+    return !!user?.fixedInvitationCode
+  }
+
+  // 检查用户是否已使用邀请码
+  const hasUsedInvitationCode = () => {
+    return !!user?.fixedInvitationCode
+  }
+
+  const quickActions = [
+    // 达人相关
+    ...(isCreator() ? [{
+      title: '任务大厅',
+      description: '浏览和接受任务',
+      href: '/task-hall',
+      icon: Briefcase,
+      color: 'bg-blue-500',
+    }, {
+      title: '我的任务',
+      description: '管理已接任务',
+      href: '/my-tasks',
+      icon: Sparkles,
+      color: 'bg-purple-500',
+    }, {
+      title: '达人中心',
+      description: '查看个人资料',
+      href: '/creator',
+      icon: Sparkles,
+      color: 'bg-pink-500',
+    }] : []),
+    // 商家/服务商相关
+    ...(isMerchantAdmin() || isMerchantStaff() || isServiceProviderAdmin() ? [{
+      title: '创建活动',
+      description: '发布营销活动',
+      href: '/create-campaign',
+      icon: Sparkles,
+      color: 'bg-indigo-500',
+    }] : []),
+    ...(isMerchantAdmin() ? [{
+      title: '商家信息',
+      description: '管理商家资料',
+      href: '/merchant',
+      icon: Building2,
+      color: 'bg-cyan-500',
+    }] : []),
+    ...(isServiceProviderAdmin() ? [{
+      title: '服务商信息',
+      description: '管理服务商资料',
+      href: '/service-provider',
+      icon: Building2,
+      color: 'bg-teal-500',
+    }] : []),
+    // 管理功能 - 商家管理
+    ...(isSuperAdmin() || isServiceProviderAdmin() ? [{
+      title: '商家管理',
+      description: isSuperAdmin() ? '管理所有商家' : '管理我的商家',
+      href: '/merchants',
+      icon: Briefcase,
+      color: 'bg-indigo-500',
+    }] : []),
+    // 管理功能 - 服务商管理（仅超级管理员）
+    ...(isSuperAdmin() ? [{
+      title: '服务商管理',
+      description: '管理服务商组织',
+      href: '/service-providers',
+      icon: Building2,
+      color: 'bg-cyan-500',
+    }] : []),
+    // 管理功能 - 达人管理
+    ...(isSuperAdmin() || isServiceProviderAdmin() ? [{
+      title: '达人管理',
+      description: isSuperAdmin() ? '管理所有达人' : '管理本组织达人',
+      href: '/user-management',
+      icon: Users,
+      color: 'bg-orange-500',
+    }] : []),
+    ...(canManageInvitations() ? [{
+      title: '邀请码管理',
+      description: '管理邀请码',
+      href: '/invitations',
+      icon: Gift,
+      color: 'bg-orange-500',
+    }] : []),
+    // 财务相关 - 始终显示
+    {
+      title: '充值',
+      description: '账户充值',
+      href: '/recharge',
+      icon: Coins,
+      color: 'bg-green-500',
+    },
+    {
+      title: '提现记录',
+      description: '查看提现记录',
+      href: '/withdrawals',
+      icon: Receipt,
+      color: 'bg-emerald-500',
+    },
+    ...(isSuperAdmin() ? [{
+      title: '提现审核',
+      description: '审核提现申请',
+      href: '/withdrawal-review',
+      icon: ShieldCheck,
+      color: 'bg-amber-500',
+    }] : []),
+  ]
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* 欢迎标题 */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">
+          欢迎回来，{user?.nickname || '用户'}
+        </h1>
+        <p className="text-gray-500 mt-1">这是您的工作台，查看概览和快捷操作</p>
+      </div>
+
+      {/* 统计卡片 */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">拥有角色</CardTitle>
+            <LayoutDashboard className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{user?.roles?.length ?? 0}</div>
+            <div className="flex flex-wrap gap-1 mt-2">
+              {user?.roles?.map((r) => (
+                <span key={r} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                  {getRoleName(r)}
+                </span>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">用户ID</CardTitle>
+            <Users className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-sm font-mono text-gray-600 truncate">
+              {user?.id}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">快捷入口</CardTitle>
+            <ShieldCheck className="h-4 w-4 text-gray-500" />
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-gray-600">下方卡片为根据您的角色显示的功能入口</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 快捷操作 */}
+      <Card>
+        <CardHeader>
+          <CardTitle>快捷操作</CardTitle>
+          <CardDescription>常用功能快速入口</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {quickActions.map((action) => {
+              const Icon = action.icon
+              return (
+                <Link
+                  key={action.href}
+                  to={action.href}
+                  className="group flex items-start gap-4 p-4 rounded-lg border hover:border-gray-300 hover:bg-gray-50 transition-all"
+                >
+                  <div className={`${action.color} p-2 rounded-lg text-white`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                      {action.title}
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-0.5">{action.description}</p>
+                  </div>
+                  <ArrowRight className="h-5 w-5 text-gray-400 group-hover:text-gray-600 group-hover:translate-x-1 transition-all" />
+                </Link>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

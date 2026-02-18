@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { getRoleName } from '../lib/roles'
 
@@ -10,32 +11,20 @@ export default function MobileNav({ onLogout }: MobileNavProps) {
   const { user } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
 
+  // 多角色：按「拥有的角色」显示全部菜单（与侧边栏一致）
+  const roles = user?.roles ?? []
+  const isSuperAdmin = () => roles.some((r) => r.toUpperCase() === 'SUPER_ADMIN')
+  const isMerchantAdmin = () => roles.some((r) => r.toUpperCase() === 'MERCHANT_ADMIN')
+  const isServiceProviderAdmin = () => roles.some((r) => r.toUpperCase() === 'SERVICE_PROVIDER_ADMIN')
+  const isCreator = () => roles.some((r) => r.toUpperCase() === 'CREATOR')
+  const isMerchantStaff = () => roles.some((r) => r.toUpperCase() === 'MERCHANT_STAFF')
+
   const canManageInvitations = () => {
-    const role = user?.currentRole
-    return role === 'super_admin' || role === 'service_provider_admin' || role === 'merchant_admin'
-  }
-
-  const isSuperAdmin = () => {
-    return user?.roles.includes('SUPER_ADMIN')
-  }
-
-  const isMerchantAdmin = () => {
-    return user?.roles.includes('MERCHANT_ADMIN')
-  }
-
-  const isServiceProviderAdmin = () => {
-    return user?.roles.includes('SP_ADMIN')
-  }
-
-  const isCreator = () => {
-    return user?.roles.includes('CREATOR')
-  }
-
-  const isMerchantStaff = () => {
-    return user?.roles.includes('MERCHANT_STAFF')
+    return isSuperAdmin() || isServiceProviderAdmin() || isMerchantAdmin()
   }
 
   const navItems = [
+    { href: '/', label: '工作台', icon: '🏠' },
     ...(canManageInvitations()
       ? [{ href: '/invitations', label: '邀请码管理', icon: '🎫' }]
       : []),
@@ -44,21 +33,25 @@ export default function MobileNav({ onLogout }: MobileNavProps) {
     ...(isServiceProviderAdmin()
       ? [{ href: '/service-provider', label: '服务商信息', icon: '🏪' }]
       : []),
-    ...(isCreator() ? [{ href: '/creator', label: '达人中心', icon: '⭐' }] : []),
+    ...(isSuperAdmin() || isServiceProviderAdmin() ? [{ href: '/merchants', label: '商家管理', icon: '📋' }] : []),
+    ...(isSuperAdmin() ? [{ href: '/service-providers', label: '服务商管理', icon: '🏪' }] : []),
+    ...(isCreator() ? [
+      { href: '/creator', label: '达人中心', icon: '⭐' },
+      { href: '/task-hall', label: '任务大厅', icon: '📋' },
+      { href: '/my-tasks', label: '我的任务', icon: '✅' },
+    ] : []),
     ...(isMerchantAdmin() || isMerchantStaff()
       ? [{ href: '/create-campaign', label: '创建活动', icon: '📢' }]
-      : []),
-    ...(isCreator()
-      ? [
-          { href: '/task-hall', label: '任务大厅', icon: '📋' },
-          { href: '/my-tasks', label: '我的任务', icon: '✅' },
-        ]
       : []),
     { href: '/recharge', label: '充值', icon: '💰' },
     { href: '/credit-transactions', label: '积分明细', icon: '📊' },
     { href: '/withdrawals', label: '提现记录', icon: '💸' },
     ...(isSuperAdmin() ? [{ href: '/withdrawal-review', label: '提现审核', icon: '✍️' }] : []),
   ]
+
+  const handleNavClick = () => {
+    setIsOpen(false)
+  }
 
   return (
     <>
@@ -101,26 +94,32 @@ export default function MobileNav({ onLogout }: MobileNavProps) {
                 </button>
               </div>
 
-              {/* 当前角色 */}
-              {user?.currentRole && (
+              {/* 拥有角色 */}
+              {user?.roles?.length ? (
                 <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                  <p className="text-xs text-blue-600">当前角色</p>
-                  <p className="text-sm font-semibold text-blue-900">{getRoleName(user.currentRole)}</p>
+                  <p className="text-xs text-blue-600">拥有角色</p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {user.roles.map((r) => (
+                      <span key={r} className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                        {getRoleName(r)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              )}
+              ) : null}
 
-              {/* 导航链接 */}
+              {/* 导航链接（使用 Link 保持 SPA 路由，与侧边栏一致） */}
               <nav className="space-y-1">
                 {navItems.map((item) => (
-                  <a
+                  <Link
                     key={item.href}
-                    href={item.href}
-                    onClick={() => setIsOpen(false)}
+                    to={item.href}
+                    onClick={handleNavClick}
                     className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
                   >
                     <span className="text-xl">{item.icon}</span>
                     <span className="text-sm font-medium">{item.label}</span>
-                  </a>
+                  </Link>
                 ))}
               </nav>
 

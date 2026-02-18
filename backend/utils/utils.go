@@ -1,15 +1,18 @@
 package utils
 
 import (
+	"strings"
+
+	"pr-business/constants"
 	"pr-business/models"
 
 	"github.com/gin-gonic/gin"
 )
 
-// HasRole 检查用户是否拥有指定角色
+// HasRole 检查用户是否拥有指定角色（不区分大小写，兼容 DB/JWT 中 creator 与 CREATOR）
 func HasRole(user *models.User, role string) bool {
 	for _, r := range user.Roles {
-		if r == role {
+		if strings.EqualFold(r, role) {
 			return true
 		}
 	}
@@ -47,30 +50,30 @@ func GetCurrentUser(c *gin.Context) (*models.User, bool) {
 
 // IsSuperAdmin 检查是否是超级管理员
 func IsSuperAdmin(user *models.User) bool {
-	return HasRole(user, "super_admin")
+	return HasRole(user, constants.RoleSuperAdmin)
 }
 
 // IsMerchantAdmin 检查是否是商家管理员
 func IsMerchantAdmin(user *models.User) bool {
-	return HasRole(user, "merchant_admin")
+	return HasRole(user, constants.RoleMerchantAdmin)
 }
 
 // IsServiceProviderAdmin 检查是否是服务商管理员
 func IsServiceProviderAdmin(user *models.User) bool {
-	return HasRole(user, "provider_admin")
+	return HasRole(user, constants.RoleServiceProviderAdmin)
 }
 
 // IsCreator 检查是否是达人
 func IsCreator(user *models.User) bool {
-	return HasRole(user, "creator")
+	return HasRole(user, constants.RoleCreator)
 }
 
 // IsMerchantStaff 检查是否是商家员工
 func IsMerchantStaff(user *models.User) bool {
-	return HasRole(user, "merchant_staff")
+	return HasRole(user, constants.RoleMerchantStaff)
 }
 
 // IsServiceProviderStaff 检查是否是服务商员工
 func IsServiceProviderStaff(user *models.User) bool {
-	return HasRole(user, "provider_staff")
+	return HasRole(user, constants.RoleServiceProviderStaff)
 }

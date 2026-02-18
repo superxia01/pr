@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { merchantApi, serviceProviderApi } from '../services/api'
-import type { Merchant, ServiceProvider, User } from '../types'
+import type { Merchant, ServiceProvider } from '../types'
 import { DataTable } from '../components/ui/data-table'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -17,23 +17,6 @@ import {
 import { Textarea } from '../components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 
-// 辅助函数：创建完整 User 对象
-const createMockUser = (id: string, nickname: string): User => ({
-  id,
-  nickname,
-  authCenterUserId: '',
-  avatarUrl: '',
-  profile: {},
-  roles: [],
-  currentRole: '',
-  lastUsedRole: '',
-  status: 'active',
-  lastLoginAt: null,
-  lastLoginIp: '',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-})
-
 export default function Merchants() {
   const { user } = useAuth()
   const [merchants, setMerchants] = useState<Merchant[]>([])
@@ -47,87 +30,14 @@ export default function Merchants() {
   }, [])
 
   const loadData = async () => {
-    // 🔴 开发模式：使用模拟数据
-    if (import.meta.env.DEV) {
-      setTimeout(() => {
-        const mockMerchants: any[] = [
-          {
-            id: 'mch_001',
-            name: '测试商家A',
-            description: '这是第一个测试商家',
-            providerId: 'sp_001',
-            adminId: 'usr_001',
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            provider: {
-              id: 'sp_001',
-              name: '测试服务商A',
-              adminId: 'usr_001',
-              userId: 'usr_001',
-              description: '测试服务商',
-              status: 'active',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-            admin: createMockUser('usr_001', '管理员A'),
-          },
-          {
-            id: 'mch_002',
-            name: '测试商家B',
-            description: '这是第二个测试商家',
-            providerId: 'sp_001',
-            adminId: 'usr_002',
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            provider: {
-              id: 'sp_001',
-              name: '测试服务商A',
-              adminId: 'usr_001',
-              userId: 'usr_001',
-              description: '测试服务商',
-              status: 'active',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-            admin: createMockUser('usr_002', '管理员B'),
-          },
-        ]
-
-        const mockProviders: any[] = [
-          {
-            id: 'sp_001',
-            name: '测试服务商A',
-            adminId: 'usr_001',
-            userId: 'usr_001',
-            description: '测试服务商',
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            admin: createMockUser('usr_001', '管理员A'),
-          },
-        ]
-
-        setMerchants(mockMerchants)
-        if (user?.currentRole === 'super_admin') {
-          setServiceProviders(mockProviders)
-        }
-        setLoading(false)
-        console.log('🔴 开发模式：使用模拟商家数据')
-      }, 500)
-      return
-    }
-
-    // 生产模式：调用真实 API
     try {
       setLoading(true)
       // 根据角色决定加载哪些商家
       let merchantData: Merchant[]
-      if (user?.currentRole === 'super_admin') {
+      if (user?.roles.includes('SUPER_ADMIN')) {
         // 超管看所有商家
         merchantData = await merchantApi.getMerchants()
-      } else if (user?.currentRole === 'provider_admin') {
+      } else if (user?.roles.includes('SERVICE_PROVIDER_ADMIN')) {
         // 服务商管理员只看自己服务商下的商家
         // 先获取服务商信息
         try {
@@ -143,7 +53,7 @@ export default function Merchants() {
       setMerchants(merchantData)
 
       // 如果是超管，还需要加载服务商列表用于创建时选择
-      if (user?.currentRole === 'super_admin') {
+      if (user?.roles.includes('SUPER_ADMIN')) {
         const providerData = await serviceProviderApi.getServiceProviders()
         setServiceProviders(providerData)
       }
@@ -166,7 +76,7 @@ export default function Merchants() {
     }
 
     // 如果是服务商管理员，自动使用自己绑定的服务商
-    if (user?.currentRole === 'provider_admin') {
+    if (user?.roles.includes('SERVICE_PROVIDER_ADMIN')) {
       try {
         const provider = await serviceProviderApi.getMyServiceProvider()
         data.providerId = provider.id
@@ -228,7 +138,7 @@ export default function Merchants() {
         </div>
       ),
     },
-    ...(user?.currentRole === 'super_admin' ? [{
+    ...(user?.roles.includes('SUPER_ADMIN') ? [{
       id: 'provider' as const,
       header: '所属服务商',
       accessorKey: 'provider' as const,
@@ -293,8 +203,8 @@ export default function Merchants() {
   ]
 
   // 权限检查
-  const canAccess = user?.currentRole === 'super_admin' ||
-                    user?.currentRole === 'provider_admin'
+  const canAccess = user?.roles.includes('SUPER_ADMIN') ||
+                    user?.roles.includes('SERVICE_PROVIDER_ADMIN')
 
   if (!canAccess) {
     return (
@@ -316,7 +226,7 @@ export default function Merchants() {
           <div className="flex justify-between h-16">
             <div className="flex items-center">
               <h1 className="text-xl font-bold">
-                PR Business - {user?.currentRole === 'super_admin' ? '商家管理' : '我的商家'}
+                PR Business - {user?.roles.includes('SUPER_ADMIN') ? '商家管理' : '我的商家'}
               </h1>
             </div>
             <div className="flex items-center gap-4">
@@ -333,10 +243,10 @@ export default function Merchants() {
         <div className="mb-6 flex justify-between items-center">
           <div>
             <h2 className="text-2xl font-bold">
-              {user?.currentRole === 'super_admin' ? '商家管理' : '我的商家'}
+              {user?.roles.includes('SUPER_ADMIN') ? '商家管理' : '我的商家'}
             </h2>
             <p className="text-muted-foreground mt-1">
-              {user?.currentRole === 'super_admin' ? '管理所有商家' : '管理您服务商下的商家'}
+              {user?.roles.includes('SUPER_ADMIN') ? '管理所有商家' : '管理您服务商下的商家'}
             </p>
           </div>
           <Button onClick={() => setShowCreateModal(true)}>
@@ -395,7 +305,7 @@ export default function Merchants() {
             </div>
 
             {/* 只有超管需要选择服务商 */}
-            {user?.currentRole === 'super_admin' && (
+            {user?.roles.includes('SUPER_ADMIN') && (
               <div className="space-y-2">
                 <Label htmlFor="providerId">所属服务商 *</Label>
                 <Select name="providerId" required>

@@ -27,7 +27,7 @@ func NewCreditController(db *gorm.DB) *CreditController {
 
 // RechargeRequest 充值请求
 type RechargeRequest struct {
-	Amount int `json:"amount" binding:"required,min=1"`
+	Amount int `json:"amount" binding:"required,min=1,max=1000000"`
 }
 
 // GetAccountBalance 获取积分余额
@@ -48,7 +48,7 @@ func (ctrl *CreditController) GetAccountBalance(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 超级管理员使用个人账户
-	if utils.IsSuperAdmin(user) || utils.HasRole(user, "admin") {
+	if utils.IsSuperAdmin(user) {
 		parsedID, err := uuid.Parse(user.AuthCenterUserID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "用户ID格式错误"})
@@ -70,26 +70,26 @@ func (ctrl *CreditController) GetAccountBalance(c *gin.Context) {
 	var ownerID uuid.UUID
 
 	if utils.IsMerchantAdmin(user) {
-		// 商家管理员：查找商家账户
+		// 商家管理员：查找商家账户（admin_id 存的是 pr 用户 id）
 		var merchant models.Merchant
-		if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&merchant).Error; err != nil {
+		if err := ctrl.db.Where("admin_id = ?", user.ID).First(&merchant).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "商家信息不存在"})
 			return
 		}
 		ownerType = models.OwnerTypeOrgMerchant
 		ownerID = merchant.ID
 	} else if utils.IsServiceProviderAdmin(user) || utils.IsServiceProviderStaff(user) {
-		// 服务商：查找服务商账户
+		// 服务商：查找服务商账户（admin_id / user_id 存的是 pr 用户 id）
 		var provider models.ServiceProvider
 		if utils.IsServiceProviderAdmin(user) {
-			if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&provider).Error; err != nil {
+			if err := ctrl.db.Where("admin_id = ?", user.ID).First(&provider).Error; err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "服务商信息不存在"})
 				return
 			}
 		} else {
 			// 服务商员工
 			var providerStaff models.ServiceProviderStaff
-			if err := ctrl.db.Where("user_id::text = ?", user.AuthCenterUserID).First(&providerStaff).Error; err != nil {
+			if err := ctrl.db.Where("user_id = ?", user.ID).First(&providerStaff).Error; err != nil {
 				c.JSON(http.StatusNotFound, gin.H{"error": "员工信息不存在"})
 				return
 			}
@@ -156,7 +156,7 @@ func (ctrl *CreditController) GetTransactions(c *gin.Context) {
 	var ownerID uuid.UUID
 
 	// 超级管理员使用个人账户
-	if utils.IsSuperAdmin(user) || utils.HasRole(user, "admin") {
+	if utils.IsSuperAdmin(user) {
 		ownerType = models.OwnerTypeUserPersonal
 		parsedID, err := uuid.Parse(user.AuthCenterUserID)
 		if err != nil {
@@ -166,17 +166,29 @@ func (ctrl *CreditController) GetTransactions(c *gin.Context) {
 		ownerID = parsedID
 	} else if utils.IsMerchantAdmin(user) {
 		var merchant models.Merchant
-		if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&merchant).Error; err != nil {
+		if err := ctrl.db.Where("admin_id = ?", user.ID).First(&merchant).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "商家信息不存在"})
 			return
 		}
 		ownerType = models.OwnerTypeOrgMerchant
 		ownerID = merchant.ID
-	} else if utils.IsServiceProviderAdmin(user) {
+	} else if utils.IsServiceProviderAdmin(user) || utils.IsServiceProviderStaff(user) {
 		var provider models.ServiceProvider
-		if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&provider).Error; err != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "服务商信息不存在"})
-			return
+		if utils.IsServiceProviderAdmin(user) {
+			if err := ctrl.db.Where("admin_id = ?", user.ID).First(&provider).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "服务商信息不存在"})
+				return
+			}
+		} else {
+			var providerStaff models.ServiceProviderStaff
+			if err := ctrl.db.Where("user_id = ?", user.ID).First(&providerStaff).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "员工信息不存在"})
+				return
+			}
+			if err := ctrl.db.Where("id = ?", providerStaff.ProviderID).First(&provider).Error; err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"error": "服务商信息不存在"})
+				return
+			}
 		}
 		ownerType = models.OwnerTypeOrgProvider
 		ownerID = provider.ID
@@ -259,15 +271,15 @@ func (ctrl *CreditController) Recharge(c *gin.Context) {
 	}
 	user := currentUser.(*models.User)
 
-	// 权限检查：只有商家可以充值
-	if !utils.HasRole(user, "merchant_admin") {
-		c.JSON(http.StatusForbidden, gin.H{"error": "只有商家可以充值"})
+	// 权限检查：只有商家管理员可以充值
+	if !utils.IsMerchantAdmin(user) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "只有商家管理员可以充值"})
 		return
 	}
 
-	// 获取商家信息
+	// 获取商家信息（admin_id 存的是 pr 用户 id）
 	var merchant models.Merchant
-	if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&merchant).Error; err != nil {
+	if err := ctrl.db.Where("admin_id = ?", user.ID).First(&merchant).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "商家信息不存在"})
 		return
 	}
@@ -414,7 +426,6 @@ func (ctrl *CreditController) createAccountWithPermission(ownerID uuid.UUID, own
 	account := &models.CreditAccount{
 		OwnerID:       ownerID,
 		OwnerType:     ownerType,
-		UserID:        &userID,
 		Balance:       0,
 		FrozenBalance: 0,
 	}

@@ -1,37 +1,67 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
+import { useToast } from '../contexts/ToastContext'
 import { merchantApi, campaignApi } from '../services/api'
 import type { Merchant } from '../types'
 
 export default function CreateCampaign() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const toast = useToast()
   const [merchants, setMerchants] = useState<Merchant[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // 判断角色
+  const isMerchantAdmin = user?.roles.includes('MERCHANT_ADMIN')
+  const isServiceProviderAdmin = user?.roles.includes('SERVICE_PROVIDER_ADMIN')
+
   // 表单数据
   const [formData, setFormData] = useState({
+    merchantId: '',
     title: '',
     requirements: '',
     platforms: [] as string[],
     taskAmount: 100,
-    campaignAmount: 1000,
+    creatorAmount: 0,
+    staffReferralAmount: 0,
+    providerAmount: 0,
     quota: 10,
     taskDeadline: '',
     submissionDeadline: '',
   })
 
   useEffect(() => {
-    loadMerchants()
+    if (isServiceProviderAdmin) {
+      loadMerchants()
+    } else if (isMerchantAdmin) {
+      loadMyMerchant()
+    }
   }, [])
+
+  const loadMyMerchant = async () => {
+    setLoading(true)
+    try {
+      const merchant = await merchantApi.getMyMerchant()
+      setFormData(prev => ({ ...prev, merchantId: merchant.id }))
+      setMerchants([merchant])
+    } catch (err: any) {
+      setError(err.response?.data?.error || '加载商家信息失败')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const loadMerchants = async () => {
     setLoading(true)
     try {
-      // 获取当前用户管理的商家
-      const merchant = await merchantApi.getMyMerchant()
-      setMerchants([merchant])
+      const data = await merchantApi.getMerchants()
+      setMerchants(data)
+      if (data.length > 0) {
+        setFormData(prev => ({ ...prev, merchantId: data[0].id }))
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || '加载商家信息失败')
     } finally {
@@ -45,18 +75,28 @@ export default function CreateCampaign() {
     setError(null)
 
     try {
-      await campaignApi.createCampaign({
+      const payload: any = {
         title: formData.title,
         requirements: formData.requirements,
         platforms: JSON.stringify(formData.platforms),
         taskAmount: formData.taskAmount,
-        campaignAmount: formData.campaignAmount,
         quota: formData.quota,
         taskDeadline: formData.taskDeadline,
         submissionDeadline: formData.submissionDeadline,
-      })
+      }
 
-      alert('创建成功！')
+      // 服务商创建时需要指定商家
+      if (isServiceProviderAdmin) {
+        payload.merchantId = formData.merchantId
+        // 服务商设置佣金分配
+        payload.creatorAmount = formData.creatorAmount || null
+        payload.staffReferralAmount = formData.staffReferralAmount || null
+        payload.providerAmount = formData.providerAmount || null
+      }
+
+      await campaignApi.createCampaign(payload)
+
+      toast.showSuccess('创建成功！')
       navigate('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.error || '创建失败')
@@ -83,10 +123,13 @@ export default function CreateCampaign() {
     } else {
       setFormData({
         ...formData,
-        platforms: [...platforms, platform],
+        platforms: [...platforms],
       })
     }
   }
+
+  // 计算活动总积分
+  const totalAmount = formData.taskAmount * formData.quota
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -94,8 +137,14 @@ export default function CreateCampaign() {
         <div className="bg-white rounded-lg shadow">
           {/* 标题 */}
           <div className="px-6 py-4 border-b border-gray-200">
-            <h1 className="text-2xl font-bold text-gray-900">创建营销活动</h1>
-            <p className="mt-1 text-sm text-gray-500">创建新的营销活动并设置任务名额</p>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {isServiceProviderAdmin ? '创建营销活动' : '提交活动申请'}
+            </h1>
+            <p className="mt-1 text-sm text-gray-500">
+              {isServiceProviderAdmin
+                ? '创建新的营销活动并设置任务名额和佣金分配，直接发布'
+                : '提交活动申请，由服务商审核并设置佣金分配后发布'}
+            </p>
           </div>
 
           {/* 内容 */}
@@ -107,18 +156,34 @@ export default function CreateCampaign() {
               </div>
             )}
 
-            {!loading && merchants.length === 0 && (
-              <div className="text-center py-12 bg-red-50 rounded-lg">
-                <p className="text-red-700">您不是商家管理员，无法创建营销活动</p>
-              </div>
-            )}
-
-            {!loading && merchants.length > 0 && (
+            {!loading && (
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* 错误提示 */}
                 {error && (
                   <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
                     {error}
+                  </div>
+                )}
+
+                {/* 服务商选择商家 */}
+                {isServiceProviderAdmin && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      选择商家 <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.merchantId}
+                      onChange={(e) => setFormData({ ...formData, merchantId: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                      required
+                    >
+                      <option value="">请选择商家</option>
+                      {merchants.map((merchant) => (
+                        <option key={merchant.id} value={merchant.id}>
+                          {merchant.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
 
@@ -182,7 +247,7 @@ export default function CreateCampaign() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      每任务积分（达人） <span className="text-red-500">*</span>
+                      每任务积分 <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="number"
@@ -195,18 +260,66 @@ export default function CreateCampaign() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      活动总积分 <span className="text-red-500">*</span>
+                      活动总积分
                     </label>
                     <input
                       type="number"
-                      value={formData.campaignAmount}
-                      onChange={(e) => setFormData({ ...formData, campaignAmount: parseInt(e.target.value) || 0 })}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-                      min="0"
-                      required
+                      value={totalAmount}
+                      className="mt-1 block w-full rounded-md border-gray-300 bg-gray-50 sm:text-sm border p-2"
+                      readOnly
                     />
+                    <p className="mt-1 text-xs text-gray-500">自动计算：每任务积分 × 任务名额</p>
                   </div>
                 </div>
+
+                {/* 服务商设置佣金分配 */}
+                {isServiceProviderAdmin && (
+                  <div className="border rounded-lg p-4 bg-gray-50">
+                    <h3 className="text-sm font-medium text-gray-700 mb-3">佣金分配（可选）</h3>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          达人佣金
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.creatorAmount || ''}
+                          onChange={(e) => setFormData({ ...formData, creatorAmount: parseInt(e.target.value) || 0 })}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                          min="0"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          员工推荐佣金
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.staffReferralAmount || ''}
+                          onChange={(e) => setFormData({ ...formData, staffReferralAmount: parseInt(e.target.value) || 0 })}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                          min="0"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">
+                          服务商佣金
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.providerAmount || ''}
+                          onChange={(e) => setFormData({ ...formData, providerAmount: parseInt(e.target.value) || 0 })}
+                          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
+                          min="0"
+                          placeholder="0"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500">留空则稍后设置</p>
+                  </div>
+                )}
 
                 {/* 任务名额 */}
                 <div>
@@ -252,6 +365,19 @@ export default function CreateCampaign() {
                   </div>
                 </div>
 
+                {/* 商家提示 */}
+                {isMerchantAdmin && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-blue-800 mb-2">提交流程说明</h4>
+                    <ul className="text-xs text-blue-700 space-y-1 list-disc list-inside">
+                      <li>提交后活动状态为"待审核"</li>
+                      <li>服务商将审核并设置佣金分配方案</li>
+                      <li>审核通过后活动将自动发布为OPEN状态</li>
+                      <li>请确保每任务积分和任务名额填写正确</li>
+                    </ul>
+                  </div>
+                )}
+
                 {/* 按钮 */}
                 <div className="flex justify-end space-x-3">
                   <button
@@ -266,7 +392,7 @@ export default function CreateCampaign() {
                     disabled={submitting}
                     className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {submitting ? '创建中...' : '创建活动'}
+                    {submitting ? '提交中...' : isServiceProviderAdmin ? '创建活动' : '提交申请'}
                   </button>
                 </div>
               </form>

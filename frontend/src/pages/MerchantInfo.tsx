@@ -7,6 +7,7 @@ import { DataTable } from '../components/ui/data-table'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog'
 import { Badge } from '../components/ui/badge'
 import { merchantApi } from '../services/api'
+import { PermissionDialog } from '../components/PermissionDialog'
 import type { Merchant, MerchantStaff } from '../types'
 
 export default function MerchantInfo() {
@@ -16,6 +17,8 @@ export default function MerchantInfo() {
   const [error, setError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
   const [showAddStaff, setShowAddStaff] = useState(false)
+  const [permissionDialogOpen, setPermissionDialogOpen] = useState(false)
+  const [selectedStaff, setSelectedStaff] = useState<MerchantStaff | null>(null)
 
   useEffect(() => {
     loadData()
@@ -25,81 +28,6 @@ export default function MerchantInfo() {
     setLoading(true)
     setError(null)
 
-    // 🔴 开发模式：使用模拟数据
-    if (import.meta.env.DEV) {
-      setTimeout(() => {
-        const mockMerchant: any = {
-          id: 'mch_001',
-          name: '测试商家',
-          description: '这是一个测试商家',
-          logoUrl: '',
-          providerId: 'sp_001',
-          adminId: 'usr_001',
-          status: 'active',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          provider: {
-            id: 'sp_001',
-            name: '测试服务商',
-            adminId: 'usr_001',
-            userId: 'usr_001',
-            description: '测试服务商',
-            logoUrl: '',
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-          admin: {
-            id: 'usr_001',
-            nickname: '测试管理员',
-            authCenterUserId: '',
-            avatarUrl: '',
-            profile: {},
-            roles: [],
-            currentRole: '',
-            lastUsedRole: '',
-            status: 'active',
-            lastLoginAt: null,
-            lastLoginIp: '',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          },
-        }
-
-        const mockStaff: any[] = [
-          {
-            id: 'staff_001',
-            merchantId: 'mch_001',
-            userId: 'usr_002',
-            role: 'STAFF',
-            joinedAt: new Date().toISOString(),
-            user: {
-              id: 'usr_002',
-              nickname: '员工A',
-              authCenterUserId: '',
-              avatarUrl: '',
-              profile: {},
-              roles: [],
-              currentRole: '',
-              lastUsedRole: '',
-              status: 'active',
-              lastLoginAt: null,
-              lastLoginIp: '',
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            },
-          },
-        ]
-
-        setMerchant(mockMerchant)
-        setStaff(mockStaff)
-        setLoading(false)
-        console.log('🔴 开发模式：使用模拟商家数据')
-      }, 500)
-      return
-    }
-
-    // 生产模式：调用真实 API
     try {
       const merchantData = await merchantApi.getMyMerchant()
       setMerchant(merchantData)
@@ -143,6 +71,46 @@ export default function MerchantInfo() {
       loadData()
     } catch (err: any) {
       alert(err.response?.data?.error || '删除失败')
+    }
+  }
+
+  const handleOpenPermissionDialog = (staffMember: MerchantStaff) => {
+    setSelectedStaff(staffMember)
+    setPermissionDialogOpen(true)
+  }
+
+  const handleManagePermissions = async (permissions: string[]) => {
+    if (!merchant || !selectedStaff) return
+
+    try {
+      // Get current permissions
+      const currentPermissions = selectedStaff.permissions?.map(p => p.permissionCode) || []
+
+      // Grant new permissions
+      for (const permCode of permissions) {
+        if (!currentPermissions.includes(permCode)) {
+          await merchantApi.updateMerchantStaffPermission(
+            merchant.id,
+            selectedStaff.id,
+            { permissionCode: permCode, action: 'grant' }
+          )
+        }
+      }
+
+      // Revoke removed permissions
+      for (const permCode of currentPermissions) {
+        if (!permissions.includes(permCode)) {
+          await merchantApi.updateMerchantStaffPermission(
+            merchant.id,
+            selectedStaff.id,
+            { permissionCode: permCode, action: 'revoke' }
+          )
+        }
+      }
+
+      loadData()
+    } catch (err: any) {
+      throw err
     }
   }
 
@@ -301,7 +269,12 @@ export default function MerchantInfo() {
                         header: '操作',
                         cell: ({ row }) => (
                           <div className="space-x-2">
-                            <Button variant="outline" size="sm" className="text-blue-600 hover:text-blue-900">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-blue-600 hover:text-blue-900"
+                              onClick={() => handleOpenPermissionDialog(row)}
+                            >
                               编辑权限
                             </Button>
                             <Button
@@ -333,6 +306,18 @@ export default function MerchantInfo() {
                 />
               </DialogContent>
             </Dialog>
+
+            {/* 权限管理对话框 */}
+            {selectedStaff && (
+              <PermissionDialog
+                open={permissionDialogOpen}
+                onOpenChange={setPermissionDialogOpen}
+                staffName={selectedStaff.user?.nickname || selectedStaff.userId}
+                staffRole="MERCHANT_STAFF"
+                currentPermissions={selectedStaff.permissions?.map(p => p.permissionCode) || []}
+                onSave={handleManagePermissions}
+              />
+            )}
           </CardContent>
         </Card>
       </div>

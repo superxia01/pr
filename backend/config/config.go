@@ -66,15 +66,15 @@ func Load() *Config {
 
 func setDefaults() {
 	viper.SetDefault("APP_ENV", "development")
-	viper.SetDefault("APP_PORT", "8080")
+	viper.SetDefault("APP_PORT", "8081")
 	viper.SetDefault("APP_NAME", "PR Business")
 	viper.SetDefault("APP_DEBUG", "true")
 
 	viper.SetDefault("DB_HOST", "localhost")
 	viper.SetDefault("DB_PORT", "5432")
-	viper.SetDefault("DB_USER", "pr_business")
+	viper.SetDefault("DB_USER", "nexus_user")
 	viper.SetDefault("DB_PASSWORD", "")
-	viper.SetDefault("DB_NAME", "pr_business")
+	viper.SetDefault("DB_NAME", "pr_db")
 	viper.SetDefault("DB_SSLMODE", "disable")
 
 	viper.SetDefault("REDIS_HOST", "localhost")
@@ -88,7 +88,7 @@ func setDefaults() {
 
 	viper.SetDefault("AUTH_CENTER_URL", "http://os.crazyaigc.com")
 	viper.SetDefault("AUTH_CENTER_API_KEY", "")
-	viper.SetDefault("AUTH_CENTER_REDIRECT_URI", "http://localhost:8080/api/v1/auth/callback")
+	viper.SetDefault("AUTH_CENTER_REDIRECT_URI", "http://localhost:8081/api/v1/auth/callback")
 
 	viper.SetDefault("FRONTEND_URL", "http://localhost:5173")
 }

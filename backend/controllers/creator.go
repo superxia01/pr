@@ -2,9 +2,11 @@ package controllers
 
 import (
 	"net/http"
+	"pr-business/constants"
 	"pr-business/models"
 	"pr-business/utils"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -53,6 +55,63 @@ func (ctrl *CreatorController) GetCreators(c *gin.Context) {
 	}
 	user := currentUser.(*models.User)
 
+	// 权限过滤
+	if !utils.IsSuperAdmin(user) {
+		// 非超级管理员需要根据角色过滤数据
+
+		if utils.IsServiceProviderAdmin(user) {
+			// 服务商管理员：查看本组织的所有达人
+			var provider models.ServiceProvider
+			if err := ctrl.db.Where("admin_id::text = ?", user.AuthCenterUserID).First(&provider).Error; err != nil {
+				c.JSON(http.StatusForbidden, gin.H{"error": "未找到关联的服务商"})
+				return
+			}
+
+			// 获取本组织的所有员工ID
+			var staffIDs []string
+			if err := ctrl.db.Model(&models.ServiceProviderStaff{}).
+				Where("provider_id = ?", provider.ID).
+				Pluck("user_id::text", &staffIDs).Error; err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "获取员工列表失败"})
+				return
+			}
+
+			// 只能看到本组织员工邀请的达人
+			query = query.Where("inviter_id IN ?", staffIDs)
+
+		} else if utils.IsServiceProviderStaff(user) {
+			// 服务商员工：检查是否有达人管理权限
+			var staff models.ServiceProviderStaff
+			if err := ctrl.db.Where("user_id::text = ?", user.AuthCenterUserID).First(&staff).Error; err != nil {
+				c.JSON(http.StatusForbidden, gin.H{"error": "未找到关联的员工信息"})
+				return
+			}
+
+			// 检查是否有达人管理权限
+			var permission models.ServiceProviderStaffPermission
+			hasPermission := ctrl.db.Where("staff_id = ? AND permission_code = ?", staff.ID, "MANAGE_CREATORS").First(&permission).Error == nil
+
+			if hasPermission {
+				// 有权限：查看本组织的所有达人
+				var staffIDs []string
+				if err := ctrl.db.Model(&models.ServiceProviderStaff{}).
+					Where("provider_id = ?", staff.ProviderID).
+					Pluck("user_id::text", &staffIDs).Error; err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "获取员工列表失败"})
+					return
+				}
+				query = query.Where("inviter_id IN ?", staffIDs)
+			} else {
+				// 无权限：只能查看自己邀请的达人
+				query = query.Where("inviter_id::text = ?", user.AuthCenterUserID)
+			}
+		} else {
+			// 其他角色无权限查看达人列表
+			c.JSON(http.StatusForbidden, gin.H{"error": "无权限查看达人列表"})
+			return
+		}
+	}
+
 	// 等级过滤
 	if level := c.Query("level"); level != "" {
 		query = query.Where("level = ?", level)
@@ -61,18 +120,6 @@ func (ctrl *CreatorController) GetCreators(c *gin.Context) {
 	// 状态过滤
 	if status := c.Query("status"); status != "" {
 		query = query.Where("status = ?", status)
-	}
-
-	// 邀请人过滤
-	if inviterID := c.Query("inviter_id"); inviterID != "" {
-		// 如果是服务商员工，只能看到自己邀请的达人
-		if utils.HasRole(user, "provider_staff") {
-			if inviterID != user.ID {
-				c.JSON(http.StatusForbidden, gin.H{"error": "无权限查看其他员工邀请的达人"})
-				return
-			}
-		}
-		query = query.Where("inviter_id = ?", inviterID)
 	}
 
 	// 分页
@@ -150,9 +197,21 @@ func (ctrl *CreatorController) UpdateCreator(c *gin.Context) {
 	}
 	user := currentUser.(*models.User)
 
-	// 权限检查：达人本人或管理员可以更新
-	isCreator := user.ID == creator.UserID.String()
-	isAdmin := utils.HasRole(user, "super_admin") || utils.HasRole(user, "provider_admin") || utils.HasRole(user, "provider_staff")
+	// 权限检查
+	isCreator := user.ID == creator.UserID
+
+	// 如果是管理员，检查是否有编辑达人权限
+	if utils.IsServiceProviderStaff(user) || utils.IsMerchantStaff(user) {
+		if !utils.HasPermission(ctrl.db, user, constants.PermissionEditCreatorInfo) {
+			c.JSON(http.StatusForbidden, gin.H{
+				"error": "无编辑达人权限",
+				"requiredPermission": constants.PermissionEditCreatorInfo,
+			})
+			return
+		}
+	}
+
+	isAdmin := utils.IsSuperAdmin(user) || utils.IsServiceProviderAdmin(user) || utils.IsServiceProviderStaff(user)
 
 	if !isCreator && !isAdmin {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限更新达人信息"})
@@ -271,16 +330,79 @@ func (ctrl *CreatorController) GetCreatorInviterRelationship(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// isCreatorRole 判断当前请求是否以达人身份访问（检查 roles 数组）
+func isCreatorRole(c *gin.Context, user *models.User) bool {
+	// 1. 检查用户是否拥有 CREATOR 角色
+	if utils.HasRole(user, constants.RoleCreator) {
+		return true
+	}
+	// 2. JWT 中的 roles（避免 DB 未同步）
+	if c != nil {
+		if rolesVal, ok := c.Get("roles"); ok && rolesVal != nil {
+			switch arr := rolesVal.(type) {
+			case []string:
+				for _, r := range arr {
+					if strings.EqualFold(r, constants.RoleCreator) {
+						return true
+					}
+				}
+			case models.Roles:
+				for _, r := range arr {
+					if strings.EqualFold(r, constants.RoleCreator) {
+						return true
+					}
+				}
+			case []interface{}:
+				for _, v := range arr {
+					if s, ok := v.(string); ok && strings.EqualFold(s, constants.RoleCreator) {
+						return true
+					}
+				}
+			}
+		}
+	}
+	return false
+}
+
+// ensureCreatorForUser 若当前用户无达人记录则自动创建（懒创建）。仅允许有达人身份时创建，否则返回未找到。
+func (ctrl *CreatorController) ensureCreatorForUser(c *gin.Context, user *models.User) (*models.Creator, error) {
+	var creator models.Creator
+	err := ctrl.db.Where("user_id = ? AND is_primary = ?", user.ID, true).First(&creator).Error
+	if err == nil {
+		return &creator, nil
+	}
+	// 仅当具备达人身份（DB 或 JWT）时才懒创建，避免给非达人建记录
+	if !isCreatorRole(c, user) {
+		return nil, gorm.ErrRecordNotFound
+	}
+	// 插入主达人记录（user_id 与 users.id 一致）
+	res := ctrl.db.Exec(
+		"INSERT INTO creators (id, user_id, is_primary, level, followers_count, status) VALUES (uuid_generate_v4(), ?, true, 'UGC', 0, 'active')",
+		user.ID,
+	)
+	if res.Error != nil {
+		// 可能已并发创建，再查一次
+		if err2 := ctrl.db.Where("user_id = ? AND is_primary = ?", user.ID, true).First(&creator).Error; err2 == nil {
+			return &creator, nil
+		}
+		return nil, res.Error
+	}
+	if err = ctrl.db.Where("user_id = ? AND is_primary = ?", user.ID, true).First(&creator).Error; err != nil {
+		return nil, err
+	}
+	return &creator, nil
+}
+
 // GetMyCreatorProfile 获取当前用户的达人资料
 // @Summary 获取当前用户的达人资料
-// @Description 达人获取自己的资料信息
+// @Description 有达人角色但无档案时返回 needSetup，引导用户填写；有档案则返回 creator
 // @Tags 达人管理
 // @Accept json
 // @Produce json
 // @Success 200 {object} models.Creator
+// @Success 200 {object} map "needSetup 为 true 时表示需先填写达人信息"
 // @Router /api/v1/creator/me [get]
 func (ctrl *CreatorController) GetMyCreatorProfile(c *gin.Context) {
-	// 获取当前用户
 	currentUser, exists := c.Get("user")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未认证"})
@@ -288,14 +410,19 @@ func (ctrl *CreatorController) GetMyCreatorProfile(c *gin.Context) {
 	}
 	user := currentUser.(*models.User)
 
-	// 查找主达人资料
 	var creator models.Creator
-	if err := ctrl.db.Where("user_id = ? AND is_primary = ?", user.ID, true).Preload("User").First(&creator).Error; err != nil {
+	err := ctrl.db.Where("user_id = ? AND is_primary = ?", user.ID, true).First(&creator).Error
+	if err == nil {
+		_ = ctrl.db.Where("id = ?", creator.ID).Preload("User").First(&creator)
+		c.JSON(http.StatusOK, creator)
+		return
+	}
+	// 无达人记录：仅有达人身份时返回 needSetup，否则 404
+	if !isCreatorRole(c, user) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "您不是达人"})
 		return
 	}
-
-	c.JSON(http.StatusOK, creator)
+	c.JSON(http.StatusOK, gin.H{"needSetup": true})
 }
 
 // UpdateMyCreatorProfile 更新当前用户的达人资料
@@ -322,9 +449,9 @@ func (ctrl *CreatorController) UpdateMyCreatorProfile(c *gin.Context) {
 	}
 	user := currentUser.(*models.User)
 
-	// 查找主达人资料
-	var creator models.Creator
-	if err := ctrl.db.Where("user_id = ? AND is_primary = ?", user.ID, true).First(&creator).Error; err != nil {
+	// 查找或懒创建主达人资料
+	creator, err := ctrl.ensureCreatorForUser(c, user)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "您不是达人"})
 		return
 	}
@@ -381,8 +508,8 @@ func (ctrl *CreatorController) BreakInviterRelationship(c *gin.Context) {
 	}
 
 	// 权限检查：只有达人本人或管理员可以解除关系
-	isCreator := user.ID == creator.UserID.String()
-	isAdmin := utils.HasRole(user, "super_admin")
+	isCreator := user.ID == creator.UserID
+	isAdmin := utils.IsSuperAdmin(user)
 
 	if !isCreator && !isAdmin {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限解除邀请关系"})

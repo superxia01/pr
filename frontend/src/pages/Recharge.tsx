@@ -59,9 +59,10 @@ export default function Recharge() {
       const response = await creditApi.recharge({ amount: rechargeAmount })
       alert(`充值成功！当前余额：${response.account.balance} 积分`)
       setAmount('')
-      loadAccount()
+      await loadAccount()
     } catch (err: any) {
       setError(err.response?.data?.error || '充值失败')
+    } finally {
       setSubmitting(false)
     }
   }

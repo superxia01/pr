@@ -4,6 +4,7 @@ import type { Creator } from '../types'
 
 export default function CreatorProfile() {
   const [creator, setCreator] = useState<Creator | null>(null)
+  const [needSetup, setNeedSetup] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
@@ -17,11 +18,20 @@ export default function CreatorProfile() {
     setLoading(true)
     setError(null)
     try {
-      const creatorData = await creatorApi.getMyCreatorProfile()
-      setCreator(creatorData)
-      // 获取邀请关系
-      const inviterData = await creatorApi.getCreatorInviterRelationship(creatorData.id)
-      setInviterInfo(inviterData)
+      const data = await creatorApi.getMyCreatorProfile()
+      if (data && 'needSetup' in data && data.needSetup) {
+        setNeedSetup(true)
+        setCreator(null)
+        setInviterInfo(null)
+      } else {
+        const c = data as Creator
+        setCreator(c)
+        setNeedSetup(false)
+        if (c?.id) {
+          const inviterData = await creatorApi.getCreatorInviterRelationship(c.id)
+          setInviterInfo(inviterData)
+        }
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || '加载数据失败')
     } finally {
@@ -30,7 +40,6 @@ export default function CreatorProfile() {
   }
 
   const handleUpdateProfile = async (data: any) => {
-    if (!creator) return
     try {
       await creatorApi.updateMyCreatorProfile(data)
       loadData()
@@ -67,6 +76,27 @@ export default function CreatorProfile() {
         <div className="max-w-7xl mx-auto">
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
             {error}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // 有达人角色但尚未填写达人信息：引导填写
+  if (needSetup) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h1 className="text-2xl font-bold text-gray-900">达人个人中心</h1>
+            <p className="mt-2 text-gray-600">请先填写您的达人信息，以便使用任务大厅等功能。</p>
+            <div className="mt-6">
+              <EditProfileForm
+                creator={null}
+                onSave={handleUpdateProfile}
+                onCancel={() => {}}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -246,20 +276,20 @@ export default function CreatorProfile() {
   )
 }
 
-// 编辑资料表单
+// 编辑资料表单（creator 为 null 时用于首次填写达人信息）
 function EditProfileForm({
   creator,
   onSave,
   onCancel
 }: {
-  creator: Creator
+  creator: Creator | null
   onSave: (data: any) => void
   onCancel: () => void
 }) {
   const [formData, setFormData] = useState({
-    wechatOpenId: creator.wechatOpenId || '',
-    wechatNickname: creator.wechatNickname || '',
-    wechatAvatar: creator.wechatAvatar || '',
+    wechatOpenId: creator?.wechatOpenId ?? '',
+    wechatNickname: creator?.wechatNickname ?? '',
+    wechatAvatar: creator?.wechatAvatar ?? '',
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -297,18 +327,20 @@ function EditProfileForm({
         />
       </div>
       <div className="flex justify-end space-x-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-        >
-          取消
-        </button>
+        {creator != null && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+          >
+            取消
+          </button>
+        )}
         <button
           type="submit"
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
-          保存
+          {creator == null ? '保存并创建达人档案' : '保存'}
         </button>
       </div>
     </form>

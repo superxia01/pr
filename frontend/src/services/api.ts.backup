@@ -1,0 +1,660 @@
+import axios, { AxiosError } from 'axios'
+import type {
+  LoginRequest,
+  PasswordLoginRequest,
+  LoginResponse,
+  RefreshTokenRequest,
+  User,
+  ApiError,
+  InvitationCode,
+  UseInvitationCodeRequest,
+  UseInvitationCodeResponse,
+  GetMyInvitationsResponse,
+  InvitableRole,
+  Merchant,
+  CreateMerchantRequest,
+  UpdateMerchantRequest,
+  MerchantStaff,
+  AddMerchantStaffRequest,
+  ServiceProvider,
+  CreateServiceProviderRequest,
+  UpdateServiceProviderRequest,
+  ServiceProviderStaff,
+  AddServiceProviderStaffRequest,
+  Creator,
+  UpdateCreatorRequest,
+  CreatorsResponse,
+  CreatorLevelStats,
+  Campaign,
+  CreateCampaignRequest,
+  UpdateCampaignRequest,
+  Task,
+  AcceptTaskRequest,
+  SubmitTaskRequest,
+  AuditTaskRequest,
+  TasksResponse,
+  CreditAccount,
+  CreditAccountWithPermission,
+  TransactionsResponse,
+  RechargeRequest,
+  Withdrawal,
+  CreateWithdrawalRequest,
+  AuditWithdrawalRequest,
+  WithdrawalsResponse,
+  GenerateTaskInvitationCodeRequest,
+  GenerateTaskInvitationCodeResponse,
+  ValidateTaskInvitationCodeResponse,
+} from '../types'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://pr.crazyaigc.com'
+
+// 创建axios实例
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// 请求拦截器 - 添加token
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('accessToken')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// 响应拦截器 - 处理token过期
+let isRefreshing = false
+let failedQueue: Array<{
+  resolve: (value?: any) => void
+  reject: (reason?: any) => void
+}> = []
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach((prom) => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+  failedQueue = []
+}
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError<ApiError>) => {
+    const originalRequest = error.config as any
+
+    // 如果是 401 错误且不是刷新 token 的请求本身
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // 如果正在刷新，将请求加入队列
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        }).then((token) => {
+          if (token) {
+            originalRequest.headers.Authorization = `Bearer ${token}`
+          }
+          return api(originalRequest)
+        }).catch((err) => {
+          return Promise.reject(err)
+        })
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      const refreshToken = localStorage.getItem('refreshToken')
+      if (refreshToken && refreshToken !== 'null' && refreshToken !== '') {
+        try {
+          const response = await axios.post<LoginResponse>(
+            `${API_BASE_URL}/api/v1/auth/refresh`,
+            { refreshToken }
+          )
+          const { accessToken } = response.data
+          localStorage.setItem('accessToken', accessToken)
+
+          // 处理队列中的请求
+          processQueue(null, accessToken)
+
+          // 重试原请求（只重试一次）
+          originalRequest.headers.Authorization = `Bearer ${accessToken}`
+          return api(originalRequest)
+        } catch (refreshError) {
+          // 刷新失败，清除 token 并跳转登录
+          processQueue(refreshError, null)
+          localStorage.removeItem('accessToken')
+          localStorage.removeItem('refreshToken')
+          localStorage.removeItem('user')
+          window.location.href = '/login'
+          return Promise.reject(refreshError)
+        } finally {
+          isRefreshing = false
+        }
+      } else {
+        // 没有 refreshToken，清除登录状态并跳转登录
+        processQueue(error, null)
+        localStorage.removeItem('accessToken')
+        localStorage.removeItem('refreshToken')
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+      }
+    } else if (error.response?.status === 401 && originalRequest._retry) {
+      // 已经重试过但仍然 401，说明刷新后的 token 也无效，直接跳转登录
+      localStorage.removeItem('accessToken')
+      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('user')
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
+// 认证API
+export const authApi = {
+  // 微信登录
+  wechatLogin: async (data: LoginRequest) => {
+    const response = await api.post<LoginResponse>('/api/v1/auth/wechat', data)
+    return response.data
+  },
+
+  // 密码登录
+  passwordLogin: async (data: PasswordLoginRequest) => {
+    const response = await api.post<LoginResponse>('/api/v1/auth/password', data)
+    return response.data
+  },
+
+  // 刷新令牌
+  refreshToken: async (data: RefreshTokenRequest) => {
+    const response = await api.post<{ accessToken: string; expiresIn: number }>(
+      '/api/v1/auth/refresh',
+      data
+    )
+    return response.data
+  },
+
+  // 角色切换功能已移除（多角色设计）
+
+  // 获取当前用户
+  getCurrentUser: async () => {
+    const response = await api.get<User>('/api/v1/user/me')
+    return response.data
+  },
+}
+
+// 邀请码API
+export const invitationApi = {
+  // 获取我的固定邀请码列表（人邀请人）
+  getMyFixedInvitationCodes: async () => {
+    const response = await api.get<{ invitableRoles: InvitableRole[]; currentRole: string }>(
+      '/api/v1/invitations/fixed-codes'
+    )
+    return response.data
+  },
+
+  // 获取邀请码列表（旧版兼容）
+  listInvitationCodes: async (params?: {
+    type?: string
+    targetRole?: string
+    generatorType?: string
+    isActive?: boolean
+  }) => {
+    const response = await api.get<{ invitationCodes: InvitationCode[]; total: number }>(
+      '/api/v1/invitations',
+      { params }
+    )
+    return response.data
+  },
+
+  // 获取我的邀请列表
+  getMyInvitations: async (params?: {
+    page?: number
+    page_size?: number
+    inviteeRole?: string
+  }) => {
+    const response = await api.get<GetMyInvitationsResponse>(
+      '/api/v1/invitations/my',
+      { params }
+    )
+    return response.data
+  },
+
+  // 获取邀请码详情
+  getInvitationCode: async (code: string) => {
+    const response = await api.get<InvitationCode>(`/api/v1/invitations/${code}`)
+    return response.data
+  },
+
+  // 使用邀请码
+  useInvitationCode: async (data: UseInvitationCodeRequest) => {
+    const response = await api.post<UseInvitationCodeResponse>(
+      '/api/v1/invitations/use',
+      data
+    )
+    return response.data
+  },
+
+  // 禁用邀请码
+  disableInvitationCode: async (code: string) => {
+    const response = await api.post<{ message: string }>(
+      `/api/v1/invitations/${code}/disable`
+    )
+    return response.data
+  },
+}
+
+// 商家API
+export const merchantApi = {
+  // 创建商家
+  createMerchant: async (data: CreateMerchantRequest) => {
+    const response = await api.post<Merchant>('/api/v1/merchants', data)
+    return response.data
+  },
+
+  // 获取商家列表
+  getMerchants: async (params?: { status?: string; provider_id?: string }) => {
+    const response = await api.get<Merchant[]>('/api/v1/merchants', { params })
+    return response.data
+  },
+
+  // 获取商家详情
+  getMerchant: async (id: string) => {
+    const response = await api.get<Merchant>(`/api/v1/merchants/${id}`)
+    return response.data
+  },
+
+  // 更新商家
+  updateMerchant: async (id: string, data: UpdateMerchantRequest) => {
+    const response = await api.put<Merchant>(`/api/v1/merchants/${id}`, data)
+    return response.data
+  },
+
+  // 删除商家
+  deleteMerchant: async (id: string) => {
+    const response = await api.delete<{ message: string }>(`/api/v1/merchants/${id}`)
+    return response.data
+  },
+
+  // 获取当前用户管理的商家
+  getMyMerchant: async () => {
+    const response = await api.get<Merchant>('/api/v1/merchant/me')
+    return response.data
+  },
+
+  // 添加商家员工
+  addMerchantStaff: async (merchantId: string, data: AddMerchantStaffRequest) => {
+    const response = await api.post<MerchantStaff>(
+      `/api/v1/merchants/${merchantId}/staff`,
+      data
+    )
+    return response.data
+  },
+
+  // 获取商家员工列表
+  getMerchantStaff: async (merchantId: string) => {
+    const response = await api.get<MerchantStaff[]>(
+      `/api/v1/merchants/${merchantId}/staff`
+    )
+    return response.data
+  },
+
+  // 更新员工权限
+  updateMerchantStaffPermission: async (
+    merchantId: string,
+    staffId: string,
+    data: { permissionCode: string; action: 'grant' | 'revoke' }
+  ) => {
+    const response = await api.put<{ message: string }>(
+      `/api/v1/merchants/${merchantId}/staff/${staffId}/permissions`,
+      data
+    )
+    return response.data
+  },
+
+  // 删除商家员工
+  deleteMerchantStaff: async (merchantId: string, staffId: string) => {
+    const response = await api.delete<{ message: string }>(
+      `/api/v1/merchants/${merchantId}/staff/${staffId}`
+    )
+    return response.data
+  },
+}
+
+// 服务商API
+export const serviceProviderApi = {
+  // 创建服务商
+  createServiceProvider: async (data: CreateServiceProviderRequest) => {
+    const response = await api.post<ServiceProvider>('/api/v1/service-providers', data)
+    return response.data
+  },
+
+  // 获取服务商列表
+  getServiceProviders: async (params?: { status?: string }) => {
+    const response = await api.get<ServiceProvider[]>('/api/v1/service-providers', { params })
+    return response.data
+  },
+
+  // 获取服务商详情
+  getServiceProvider: async (id: string) => {
+    const response = await api.get<ServiceProvider>(`/api/v1/service-providers/${id}`)
+    return response.data
+  },
+
+  // 更新服务商
+  updateServiceProvider: async (id: string, data: UpdateServiceProviderRequest) => {
+    const response = await api.put<ServiceProvider>(`/api/v1/service-providers/${id}`, data)
+    return response.data
+  },
+
+  // 删除服务商
+  deleteServiceProvider: async (id: string) => {
+    const response = await api.delete<{ message: string }>(`/api/v1/service-providers/${id}`)
+    return response.data
+  },
+
+  // 获取当前用户管理的服务商
+  getMyServiceProvider: async () => {
+    const response = await api.get<ServiceProvider>('/api/v1/service-provider/me')
+    return response.data
+  },
+
+  // 添加服务商员工
+  addServiceProviderStaff: async (providerId: string, data: AddServiceProviderStaffRequest) => {
+    const response = await api.post<ServiceProviderStaff>(
+      `/api/v1/service-providers/${providerId}/staff`,
+      data
+    )
+    return response.data
+  },
+
+  // 获取服务商员工列表
+  getServiceProviderStaff: async (providerId: string) => {
+    const response = await api.get<ServiceProviderStaff[]>(
+      `/api/v1/service-providers/${providerId}/staff`
+    )
+    return response.data
+  },
+
+  // 更新员工权限
+  updateServiceProviderStaffPermission: async (
+    providerId: string,
+    staffId: string,
+    data: { permissionCode: string; action: 'grant' | 'revoke' }
+  ) => {
+    const response = await api.put<{ message: string }>(
+      `/api/v1/service-providers/${providerId}/staff/${staffId}/permissions`,
+      data
+    )
+    return response.data
+  },
+
+  // 删除服务商员工
+  deleteServiceProviderStaff: async (providerId: string, staffId: string) => {
+    const response = await api.delete<{ message: string }>(
+      `/api/v1/service-providers/${providerId}/staff/${staffId}`
+    )
+    return response.data
+  },
+}
+
+// 达人API
+export const creatorApi = {
+  // 获取达人列表
+  getCreators: async (params?: {
+    level?: string
+    status?: string
+    inviter_id?: string
+    page?: number
+    page_size?: number
+  }) => {
+    const response = await api.get<CreatorsResponse>('/api/v1/creators', { params })
+    return response.data
+  },
+
+  // 获取达人详情
+  getCreator: async (id: string) => {
+    const response = await api.get<Creator>(`/api/v1/creators/${id}`)
+    return response.data
+  },
+
+  // 更新达人
+  updateCreator: async (id: string, data: UpdateCreatorRequest) => {
+    const response = await api.put<Creator>(`/api/v1/creators/${id}`, data)
+    return response.data
+  },
+
+  // 获取达人等级统计
+  getCreatorLevelStats: async () => {
+    const response = await api.get<{ stats: CreatorLevelStats[] }>(
+      '/api/v1/creators/stats/level'
+    )
+    return response.data
+  },
+
+  // 获取达人邀请关系
+  getCreatorInviterRelationship: async (id: string) => {
+    const response = await api.get<any>(`/api/v1/creators/${id}/inviter`)
+    return response.data
+  },
+
+  // 解除邀请关系
+  breakInviterRelationship: async (id: string) => {
+    const response = await api.post<{ message: string }>(
+      `/api/v1/creators/${id}/break-relationship`
+    )
+    return response.data
+  },
+
+  // 获取当前用户的达人资料（有达人角色但无档案时返回 { needSetup: true }）
+  getMyCreatorProfile: async () => {
+    const response = await api.get<Creator | { needSetup: true }>('/api/v1/creator/me')
+    return response.data
+  },
+
+  // 更新当前用户的达人资料
+  updateMyCreatorProfile: async (data: UpdateCreatorRequest) => {
+    const response = await api.put<Creator>('/api/v1/creator/me', data)
+    return response.data
+  },
+}
+
+// 营销活动API
+export const campaignApi = {
+  // 创建营销活动
+  createCampaign: async (data: CreateCampaignRequest) => {
+    const response = await api.post<Campaign>('/api/v1/campaigns', data)
+    return response.data
+  },
+
+  // 获取营销活动列表
+  getCampaigns: async (params?: { status?: string; merchant_id?: string }) => {
+    const response = await api.get<Campaign[]>('/api/v1/campaigns', { params })
+    return response.data
+  },
+
+  // 获取我的营销活动
+  getMyCampaigns: async () => {
+    const response = await api.get<Campaign[]>('/api/v1/campaigns/my')
+    return response.data
+  },
+
+  // 获取营销活动详情
+  getCampaign: async (id: string) => {
+    const response = await api.get<Campaign>(`/api/v1/campaigns/${id}`)
+    return response.data
+  },
+
+  // 更新营销活动
+  updateCampaign: async (id: string, data: UpdateCampaignRequest) => {
+    const response = await api.put<Campaign>(`/api/v1/campaigns/${id}`, data)
+    return response.data
+  },
+
+  // 删除营销活动
+  deleteCampaign: async (id: string) => {
+    const response = await api.delete<{ message: string }>(`/api/v1/campaigns/${id}`)
+    return response.data
+  },
+}
+
+// 任务API
+export const taskApi = {
+  // 获取任务列表
+  getTasks: async (params?: {
+    campaign_id?: string
+    status?: string
+    creator_id?: string
+  }) => {
+    const response = await api.get<Task[]>('/api/v1/tasks', { params })
+    return response.data
+  },
+
+  // 获取任务大厅
+  getTaskHall: async (params?: { page?: number; page_size?: number }) => {
+    const response = await api.get<TasksResponse>('/api/v1/tasks/hall', { params })
+    return response.data
+  },
+
+  // 获取我的任务
+  getMyTasks: async (params?: { status?: string }) => {
+    const response = await api.get<{ tasks: Task[]; needCreatorSetup?: boolean } | Task[]>('/api/v1/tasks/my', { params })
+    const data = response.data
+    if (Array.isArray(data)) return { tasks: data }
+    return data
+  },
+
+  // 获取待审核任务
+  getPendingReviewTasks: async () => {
+    const response = await api.get<Task[]>('/api/v1/tasks/pending-review')
+    return response.data
+  },
+
+  // 获取任务详情
+  getTask: async (id: string) => {
+    const response = await api.get<Task>(`/api/v1/tasks/${id}`)
+    return response.data
+  },
+
+  // 接任务
+  acceptTask: async (id: string, data: AcceptTaskRequest) => {
+    const response = await api.post<Task>(`/api/v1/tasks/${id}/accept`, data)
+    return response.data
+  },
+
+  // 提交任务
+  submitTask: async (id: string, data: SubmitTaskRequest) => {
+    const response = await api.post<Task>(`/api/v1/tasks/${id}/submit`, data)
+    return response.data
+  },
+
+  // 审核任务
+  auditTask: async (id: string, data: AuditTaskRequest) => {
+    const response = await api.post<Task>(`/api/v1/tasks/${id}/audit`, data)
+    return response.data
+  },
+}
+
+// 积分API
+export const creditApi = {
+  // 获取当前角色对应的积分余额（单账户）
+  getBalance: async () => {
+    const response = await api.get<CreditAccount>('/api/v1/credit/balance')
+    return response.data
+  },
+
+  // 获取当前用户有权限访问的所有积分账户列表（含 canView/canOperate）
+  getUserAccounts: async () => {
+    const response = await api.get<CreditAccountWithPermission[]>('/api/v1/credit/accounts')
+    return response.data
+  },
+
+  // 获取积分流水（分页）
+  getTransactions: async (params?: { page?: number; page_size?: number; type?: string }) => {
+    const response = await api.get<TransactionsResponse>('/api/v1/credit/transactions', { params })
+    return response.data
+  },
+
+  // 充值（仅商家管理员）
+  recharge: async (data: RechargeRequest) => {
+    const response = await api.post<{ message: string; account: CreditAccount }>(
+      '/api/v1/credit/recharge',
+      data
+    )
+    return response.data
+  },
+}
+
+// 提现API
+export const withdrawalApi = {
+  // 申请提现
+  createWithdrawal: async (data: CreateWithdrawalRequest) => {
+    const response = await api.post<{ message: string; withdrawal: Withdrawal }>(
+      '/api/v1/withdrawals',
+      data
+    )
+    return response.data
+  },
+
+  // 获取提现记录列表
+  getWithdrawals: async (params?: { page?: number; page_size?: number; status?: string }) => {
+    const response = await api.get<WithdrawalsResponse>('/api/v1/withdrawals', { params })
+    return response.data
+  },
+
+  // 获取提现详情
+  getWithdrawal: async (id: string) => {
+    const response = await api.get<Withdrawal>(`/api/v1/withdrawals/${id}`)
+    return response.data
+  },
+
+  // 审核提现（仅超管）
+  auditWithdrawal: async (id: string, data: AuditWithdrawalRequest) => {
+    const response = await api.post<{ message: string; withdrawal: Withdrawal }>(
+      `/api/v1/withdrawals/${id}/audit`,
+      data
+    )
+    return response.data
+  },
+
+  // 处理打款（仅超管）
+  processWithdrawal: async (id: string) => {
+    const response = await api.post<{ message: string; withdrawal: Withdrawal }>(
+      `/api/v1/withdrawals/${id}/process`
+    )
+    return response.data
+  },
+}
+
+// 任务邀请API
+export const taskInvitationApi = {
+  // 生成任务邀请码
+  generateInvitationCode: async (data: GenerateTaskInvitationCodeRequest) => {
+    const response = await api.post<GenerateTaskInvitationCodeResponse>(
+      '/api/v1/task-invitations/generate',
+      data
+    )
+    return response.data
+  },
+
+  // 验证任务邀请码
+  validateInvitationCode: async (code: string) => {
+    const response = await api.get<ValidateTaskInvitationCodeResponse>(
+      `/api/v1/task-invitations/validate/${code}`
+    )
+    return response.data
+  },
+
+  // 使用营销活动邀请码（登录后调用：自动获得达人角色、绑定邀请人、绑定活动商家/服务商）
+  useTaskInvitationCode: async (code: string) => {
+    const response = await api.post<{ message: string; campaign: any; invitationCode: any }>(
+      '/api/v1/task-invitations/use',
+      { code }
+    )
+    return response.data
+  },
+}
+
+export default api

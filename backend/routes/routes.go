@@ -4,6 +4,7 @@ import (
 	"pr-business/config"
 	"pr-business/controllers"
 	"pr-business/middlewares"
+	"pr-business/services"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -16,8 +17,20 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 		c.Next()
 	})
 
+	// 初始化服务层
+	validatorService := services.NewValidatorService(db)
+	cashAccountService := services.NewCashAccountService(db, validatorService)
+	systemAccountService := services.NewSystemAccountService(db, validatorService)
+	auditService := services.NewAuditService(db)
+	withdrawalEnhancedService := services.NewWithdrawalEnhancedService(
+		db,
+		validatorService,
+		cashAccountService,
+		systemAccountService,
+	)
+
 	// 初始化controllers
-	authController := controllers.NewAuthController(db, cfg)
+	authController := controllers.NewAuthController(cfg, db)
 	invitationController := controllers.NewInvitationController(db, cfg)
 	merchantController := controllers.NewMerchantController(db)
 	serviceProviderController := controllers.NewServiceProviderController(db)
@@ -26,43 +39,64 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 	taskController := controllers.NewTaskController(db)
 	creditController := controllers.NewCreditController(db)
 	withdrawalController := controllers.NewWithdrawalController(db)
+	taskInvitationController := controllers.NewTaskInvitationController(db)
+	rechargeOrderController := controllers.NewRechargeOrderController(db)
+
+	// 新增：财务相关控制器
+	withdrawalEnhancedController := controllers.NewWithdrawalEnhancedController(db, withdrawalEnhancedService, auditService)
+	cashAccountController := controllers.NewCashAccountController(cashAccountService, auditService)
+	systemAccountController := controllers.NewSystemAccountController(systemAccountService, auditService)
+	financialAuditController := controllers.NewFinancialAuditController(auditService)
 
 	// API路由组
 	v1 := r.Group("/api/v1")
 	{
-		// 认证路由（无需JWT验证）
+		// 认证路由（无需认证）
 		auth := v1.Group("/auth")
 		{
-			// 微信登录重定向（GET）- 重定向到auth-center
+			// 发起微信登录
 			auth.GET("/wechat/login", authController.WeChatLoginRedirect)
-			// 微信登录（POST）- 直接用code登录
-			auth.POST("/wechat", authController.WeChatLogin)
-			// 密码登录
-			auth.POST("/password", authController.PasswordLogin)
-			// 刷新令牌
-			auth.POST("/refresh", authController.RefreshToken)
 		}
 
-		// 邀请码路由（部分无需认证）
-		invitations := v1.Group("/invitations")
+		// 用户路由（需要认证）
+		user := v1.Group("/user")
+		user.Use(middlewares.AuthCenterMiddleware(cfg, db))
 		{
-			// 使用邀请码（需要认证）
-			invitations.POST("/use", middlewares.AuthMiddleware(cfg.JWTSecret), invitationController.UseInvitationCode)
+			// 获取当前用户信息
+			user.GET("/me", authController.GetCurrentUser)
+		}
+
+		// 用户管理路由（需要认证+超级管理员权限）
+		users := v1.Group("/users")
+		users.Use(middlewares.AuthCenterMiddleware(cfg, db))
+		{
+			// 获取用户列表（仅超级管理员）
+			users.GET("", authController.GetUsers)
+		}
+
+		// 邀请码路由（需要认证）
+		invitations := v1.Group("/invitations")
+		invitations.Use(middlewares.AuthCenterMiddleware(cfg, db))
+		{
+			// 获取我的固定邀请码列表（人邀请人）
+			invitations.GET("/fixed-codes", invitationController.GetMyFixedInvitationCodes)
+			// 使用邀请码（必须写在 /:code 之前，否则 "use" 会被当作 code）
+			invitations.POST("/use", invitationController.UseInvitationCode)
+			// 获取邀请码列表（旧版兼容）
+			invitations.GET("", invitationController.ListInvitationCodes)
+			// 获取我的邀请列表
+			invitations.GET("/my", invitationController.GetMyInvitations)
+			// 获取邀请码详情
+			invitations.GET("/:code", invitationController.GetInvitationCode)
+			// 禁用邀请码
+			invitations.POST("/:code/disable", invitationController.DisableInvitationCode)
 		}
 
 		// 需要认证的路由
 		protected := v1.Group("")
-		protected.Use(middlewares.AuthMiddleware(cfg.JWTSecret))
+		protected.Use(middlewares.AuthCenterMiddleware(cfg, db))
 		{
-			// 用户相关
-			protected.GET("/user/me", authController.GetCurrentUser)
-			protected.POST("/user/switch-role", authController.SwitchRole)
 
-			// 邀请码管理
-			protected.POST("/invitations", invitationController.CreateInvitationCode)
-			protected.GET("/invitations", invitationController.ListInvitationCodes)
-			protected.GET("/invitations/:code", invitationController.GetInvitationCode)
-			protected.POST("/invitations/:code/disable", invitationController.DisableInvitationCode)
 
 			// 商家管理
 			protected.POST("/merchants", merchantController.CreateMerchant)
@@ -75,6 +109,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 			protected.GET("/merchants/:id/staff", merchantController.GetMerchantStaff)
 			protected.PUT("/merchants/:id/staff/:staff_id/permissions", merchantController.UpdateMerchantStaffPermission)
 			protected.DELETE("/merchants/:id/staff/:staff_id", merchantController.DeleteMerchantStaff)
+			protected.GET("/merchants/permissions", merchantController.GetPermissions)
 
 			// 服务商管理
 			protected.POST("/service-providers", serviceProviderController.CreateServiceProvider)
@@ -87,6 +122,7 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 			protected.GET("/service-providers/:id/staff", serviceProviderController.GetServiceProviderStaff)
 			protected.PUT("/service-providers/:id/staff/:staff_id/permissions", serviceProviderController.UpdateServiceProviderStaffPermission)
 			protected.DELETE("/service-providers/:id/staff/:staff_id", serviceProviderController.DeleteServiceProviderStaff)
+			protected.GET("/service-providers/permissions", serviceProviderController.GetPermissions)
 
 			// 达人管理
 			protected.GET("/creators", creatorController.GetCreators)
@@ -101,10 +137,16 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 			// 营销活动管理
 			protected.POST("/campaigns", campaignController.CreateCampaign)
 			protected.GET("/campaigns", campaignController.GetCampaigns)
-			protected.GET("/campaigns/my", campaignController.GetMyCampaigns)
 			protected.GET("/campaigns/:id", campaignController.GetCampaign)
+			protected.POST("/campaigns/:id/approve", campaignController.ApproveCampaign)
 			protected.PUT("/campaigns/:id", campaignController.UpdateCampaign)
 			protected.DELETE("/campaigns/:id", campaignController.DeleteCampaign)
+			protected.GET("/campaigns/my", campaignController.GetMyCampaigns)
+
+			// 任务邀请管理
+			protected.POST("/task-invitations/generate", taskInvitationController.GenerateInvitationCode)
+			protected.POST("/task-invitations/use", taskInvitationController.UseTaskInvitationCode)
+			protected.GET("/task-invitations/validate/:code", taskInvitationController.ValidateInvitationCode)
 
 			// 任务管理
 			protected.GET("/tasks", taskController.GetTasks)
@@ -122,12 +164,36 @@ func SetupRoutes(r *gin.Engine, db *gorm.DB, redisClient interface{}, cfg *confi
 			protected.GET("/credit/transactions", creditController.GetTransactions)
 			protected.POST("/credit/recharge", creditController.Recharge)
 
+			// 充值订单管理（线下充值流程）
+			protected.POST("/recharge-orders", rechargeOrderController.CreateRechargeOrder)
+			protected.GET("/recharge-orders", rechargeOrderController.GetRechargeOrders)
+			protected.POST("/recharge-orders/:id/audit", rechargeOrderController.AuditRechargeOrder)
+
 			// 提现管理
 			protected.POST("/withdrawals", withdrawalController.CreateWithdrawal)
 			protected.GET("/withdrawals", withdrawalController.GetWithdrawals)
 			protected.GET("/withdrawals/:id", withdrawalController.GetWithdrawal)
 			protected.POST("/withdrawals/:id/audit", withdrawalController.AuditWithdrawal)
 			protected.POST("/withdrawals/:id/process", withdrawalController.ProcessWithdrawal)
+
+			// 新增：增强提现管理（带冻结机制）
+			protected.POST("/withdrawals/enhanced", withdrawalEnhancedController.CreateWithdrawalRequest)
+			protected.GET("/withdrawals/enhanced", withdrawalEnhancedController.GetWithdrawalRequests)
+			protected.GET("/withdrawals/enhanced/:id", withdrawalEnhancedController.GetWithdrawalRequest)
+			protected.POST("/withdrawals/enhanced/:id/approve", withdrawalEnhancedController.ApproveWithdrawalRequest)
+			protected.POST("/withdrawals/enhanced/:id/reject", withdrawalEnhancedController.RejectWithdrawalRequest)
+
+			// 新增：现金账户管理
+			protected.GET("/cash-accounts", cashAccountController.GetCashAccounts)
+			protected.POST("/cash-accounts", cashAccountController.CreateCashAccount)
+			protected.POST("/cash-accounts/:id/balance", cashAccountController.UpdateCashAccountBalance)
+
+			// 新增：系统账户管理
+			protected.GET("/system-accounts", systemAccountController.GetSystemAccounts)
+			protected.GET("/system-accounts/summary", systemAccountController.GetFinancialSummary)
+
+			// 新增：财务审计日志
+			protected.GET("/financial-audit-logs", financialAuditController.GetAuditLogs)
 		}
 	}
 }

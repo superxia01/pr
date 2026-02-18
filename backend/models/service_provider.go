@@ -10,7 +10,7 @@ import (
 // ServiceProvider 服务商模型
 type ServiceProvider struct {
 	ID          uuid.UUID              `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
-	AdminID     string                 `gorm:"type:varchar(255);uniqueIndex" json:"adminId"`
+	AdminID     *string                `gorm:"type:varchar(255);uniqueIndex" json:"adminId"`
 	UserID      string                 `gorm:"type:varchar(255);not null;index" json:"userId"`
 	Name        string                 `gorm:"type:varchar(100);not null;index" json:"name"`
 	Description string                 `gorm:"type:text" json:"description"`

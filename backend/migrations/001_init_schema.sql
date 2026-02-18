@@ -384,7 +384,7 @@ CREATE TABLE credit_accounts (
 
 -- 索引
 CREATE UNIQUE INDEX idx_credit_accounts_owner_type ON credit_accounts(owner_id, owner_type);
-CREATE INDEX idx_credit_accounts_owner_type ON credit_accounts(owner_type);
+CREATE INDEX idx_credit_accounts_owner_type_only ON credit_accounts(owner_type);
 
 COMMENT ON TABLE credit_accounts IS '积分账户表';
 COMMENT ON COLUMN credit_accounts.frozen_balance IS '冻结余额：商家/服务商为预扣费用，达人/员工为待确认收入+待打款金额';

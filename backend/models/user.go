@@ -75,14 +75,17 @@ func (p Profile) Value() (driver.Value, error) {
 type User struct {
 	ID               string         `gorm:"primaryKey;type:varchar(255)" json:"id"`
 	AuthCenterUserID string         `gorm:"type:uuid;not null;uniqueIndex" json:"authCenterUserId"`
+	OpenID           *uuid.UUID     `gorm:"type:uuid" json:"openId"`
+	UnionID          *uuid.UUID     `gorm:"type:uuid" json:"unionId"`
+	LoginType        string         `gorm:"type:varchar(20);default:'local';check:login_type IN ('local', 'wechat')" json:"loginType"`
 	Nickname         string         `gorm:"type:varchar(50)" json:"nickname"`
 	AvatarURL        string         `gorm:"type:varchar(500)" json:"avatarUrl"`
 	Profile          Profile        `gorm:"type:jsonb;default:'{}'" json:"profile"`
 	Roles            Roles          `gorm:"type:jsonb;default:'[]'" json:"roles"`
-	ActiveRole       string         `gorm:"column:active_role;type:varchar(50)" json:"currentRole"`
-	LastUsedRole     string         `gorm:"type:varchar(50)" json:"lastUsedRole"`
 	InvitedBy        string         `gorm:"type:varchar(255)" json:"invitedBy"`
 	InvitationCodeID string         `gorm:"type:uuid" json:"invitationCodeId"`
+	// 每个用户的固定邀请码（格式：INV-{user_id后8位}）
+	FixedInvitationCode  string         `gorm:"type:varchar(30);uniqueIndex" json:"fixedInvitationCode"`
 	Status           string         `gorm:"type:varchar(20);not null;default:'active';check:status IN ('active', 'banned', 'inactive')" json:"status"`
 	LastLoginAt      *time.Time     `json:"lastLoginAt"`
 	LastLoginIP      string         `gorm:"type:varchar(50)" json:"lastLoginIp"`

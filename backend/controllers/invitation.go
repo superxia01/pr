@@ -1,19 +1,32 @@
 package controllers
 
 import (
+	"fmt"
 	"net/http"
 	"pr-business/config"
+	"pr-business/constants"
 	"pr-business/models"
 	"pr-business/utils"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type InvitationController struct {
 	db  *gorm.DB
 	cfg *config.Config
+}
+
+// getUserRoles 从上下文或数据库获取用户角色
+func (ctrl *InvitationController) getUserRoles(c *gin.Context) ([]string, error) {
+	// 优先从上下文获取
+	userID := c.GetString("userId")
+	var user models.User
+	if err := ctrl.db.Where("id = ?", userID).First(&user).Error; err != nil {
+		return nil, err
+	}
+	return []string(user.Roles), nil
 }
 
 func NewInvitationController(db *gorm.DB, cfg *config.Config) *InvitationController {
@@ -48,11 +61,13 @@ func (ctrl *InvitationController) CreateInvitationCode(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetString("userId")
-
 	// 验证权限：只有超级管理员、服务商管理员、商家管理员可以创建邀请码
-	currentRole := c.GetString("currentRole")
-	if !ctrl.canCreateInvitationCode(currentRole, req.CodeType, req.OwnerType) {
+	roles, err := ctrl.getUserRoles(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户角色失败"})
+		return
+	}
+	if !ctrl.canCreateInvitationCode(roles, req.CodeType, req.OwnerType) {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": "Insufficient permissions to create this type of invitation code",
 		})
@@ -84,31 +99,16 @@ func (ctrl *InvitationController) CreateInvitationCode(c *gin.Context) {
 		return
 	}
 
-	// 解析过期时间
-	var expiresAt *time.Time
-	if req.ExpiresAt != "" {
-		parsedTime, err := time.Parse(time.RFC3339, req.ExpiresAt)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "Invalid expiresAt format, use ISO 8601",
-			})
-			return
-		}
-		expiresAt = &parsedTime
-	}
-
 	// 创建邀请码
 	invitationCode := models.InvitationCode{
-		Code:      code,
-		CodeType:  req.CodeType,
-		OwnerID:   req.OwnerID,
-		OwnerType: req.OwnerType,
-		Status:    "active",
-		MaxUses:   req.MaxUses,
-		UseCount:  0,
-		ExpiresAt: expiresAt,
-		UsedBy:    []string{},
-		Metadata:  "{}",
+		Code:           code,
+		Type:            req.CodeType,
+		TargetRole:      req.CodeType, // 邀请码类型即为目标角色
+		GeneratorID:      c.GetString("userId"),
+		GeneratorType:    req.OwnerType, // 所有者类型即生成者类型
+		OrganizationID:    nil, // 固定邀请码暂不绑定具体组织
+		IsActive:        true,
+		UseCount:        0,
 	}
 
 	if err := ctrl.db.Create(&invitationCode).Error; err != nil {
@@ -117,12 +117,6 @@ func (ctrl *InvitationController) CreateInvitationCode(c *gin.Context) {
 		})
 		return
 	}
-
-	// 记录创建者
-	ctrl.db.Model(&invitationCode).Update("metadata", gin.H{
-		"createdBy": userID,
-		"createdAt": time.Now(),
-	})
 
 	c.JSON(http.StatusCreated, invitationCode)
 }
@@ -160,10 +154,23 @@ func (ctrl *InvitationController) ListInvitationCodes(c *gin.Context) {
 
 	// 权限过滤：用户只能看到自己创建的或自己类型的邀请码
 	userID := c.GetString("userId")
-	currentRole := c.GetString("currentRole")
+	roles, err := ctrl.getUserRoles(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户角色失败"})
+		return
+	}
+
+	// 检查是否有超级管理员角色
+	hasSuperAdmin := false
+	for _, role := range roles {
+		if role == "SUPER_ADMIN" {
+			hasSuperAdmin = true
+			break
+		}
+	}
 
 	// 超级管理员可以看到所有邀请码
-	if currentRole != "super_admin" {
+	if !hasSuperAdmin {
 		// 其他角色只能看到自己的邀请码
 		query = query.Where("owner_id = ?", userID)
 	}
@@ -195,7 +202,7 @@ func (ctrl *InvitationController) ListInvitationCodes(c *gin.Context) {
 	})
 }
 
-// UseInvitationCode 使用邀请码
+// UseInvitationCode 使用邀请码（从数据库验证）
 func (ctrl *InvitationController) UseInvitationCode(c *gin.Context) {
 	var req UseInvitationCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -205,55 +212,185 @@ func (ctrl *InvitationController) UseInvitationCode(c *gin.Context) {
 		return
 	}
 
-	// 查找邀请码
+	// 从数据库查找邀请码
 	var invitationCode models.InvitationCode
 	result := ctrl.db.Where("code = ?", req.Code).First(&invitationCode)
 
 	if result.Error == gorm.ErrRecordNotFound {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "Invitation code not found",
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "邀请码不存在",
 		})
 		return
 	} else if result.Error != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Database error",
+			"error": "查询邀请码失败",
 		})
 		return
 	}
 
-	// 检查邀请码是否可用
-	if !invitationCode.CanBeUsed() {
+	// 检查邀请码是否激活
+	if !invitationCode.IsActive {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Invitation code is not available",
-			"status": invitationCode.Status,
+			"error": "邀请码已被禁用",
 		})
 		return
 	}
 
-	// 检查用户是否已使用过
-	for _, usedBy := range invitationCode.UsedBy {
-		if usedBy == req.UserID {
+	targetRole := invitationCode.TargetRole
+
+	// 验证组织ID是否有效（如果需要组织绑定）
+	var orgID string
+	if invitationCode.OrganizationID != nil {
+		orgID = invitationCode.OrganizationID.String()
+	}
+
+	if utils.RequiresOrganizationBinding(targetRole) {
+		// 验证组织ID是否存在
+		if orgID == "" {
 			c.JSON(http.StatusBadRequest, gin.H{
-				"error": "You have already used this invitation code",
+				"error": "此角色需要选择组织",
 			})
 			return
 		}
+
+		// 根据角色类型验证组织是否存在
+		orgType := utils.GetOrganizationTypeByRole(targetRole)
+		if orgType == "service_provider" {
+			var sp models.ServiceProvider
+			if err := ctrl.db.Where("id = ?", orgID).First(&sp).Error; err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": "服务商不存在",
+				})
+				return
+			}
+		} else if orgType == "merchant" {
+			var m models.Merchant
+			if err := ctrl.db.Where("id = ?", orgID).First(&m).Error; err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error": "商家不存在",
+				})
+				return
+			}
+		}
 	}
 
-	// 使用邀请码
-	invitationCode.IncrementUse(req.UserID)
+	// 更新使用次数
+	invitationCode.UseCount += 1
 	if err := ctrl.db.Save(&invitationCode).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": "Failed to use invitation code",
-		})
+		fmt.Printf("[UseInvitationCode] Failed to update use count: %v\n", err)
+	}
+
+	// 给予被邀请用户目标角色
+	// 获取当前用户信息
+	var user models.User
+	if err := ctrl.db.Where("id = ?", c.GetString("userId")).First(&user).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户信息失败"})
 		return
 	}
 
+	// 检查用户是否已有该角色
+	hasRole := false
+	for _, role := range user.Roles {
+		if role == targetRole {
+			hasRole = true
+			break
+		}
+	}
+
+	// 如果没有该角色，添加角色
+	if !hasRole {
+		user.Roles = append(user.Roles, targetRole)
+		if err := ctrl.db.Save(&user).Error; err != nil {
+			fmt.Printf("[UseInvitationCode] Failed to add role to user: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "添加角色失败"})
+			return
+		}
+		fmt.Printf("[UseInvitationCode] Added role %s to user %s\n", targetRole, user.ID)
+	} else {
+		fmt.Printf("[UseInvitationCode] User %s already has role %s\n", user.ID, targetRole)
+	}
+
+	// 如果需要组织绑定，设置用户为该组织的管理员
+	if orgID != "" {
+		orgType := utils.GetOrganizationTypeByRole(targetRole)
+		if targetRole == "SERVICE_PROVIDER_ADMIN" && orgType == "service_provider" {
+			// 设置用户为服务商的管理员
+			if err := ctrl.db.Model(&models.ServiceProvider{}).
+				Where("id = ?", orgID).
+				Update("admin_id", user.ID).Error; err != nil {
+				fmt.Printf("[UseInvitationCode] Failed to set service provider admin: %v\n", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "设置服务商管理员失败"})
+				return
+			}
+			fmt.Printf("[UseInvitationCode] Set user %s as admin of service provider %s\n", user.ID, orgID)
+		} else if targetRole == "MERCHANT_ADMIN" && orgType == "merchant" {
+			// 设置用户为商家的管理员
+			if err := ctrl.db.Model(&models.Merchant{}).
+				Where("id = ?", orgID).
+				Update("admin_id", user.ID).Error; err != nil {
+				fmt.Printf("[UseInvitationCode] Failed to set merchant admin: %v\n", err)
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "设置商家管理员失败"})
+				return
+			}
+			fmt.Printf("[UseInvitationCode] Set user %s as admin of merchant %s\n", user.ID, orgID)
+		} else if targetRole == "SERVICE_PROVIDER_STAFF" && orgType == "service_provider" {
+			// 创建服务商员工记录
+			var existingStaff models.ServiceProviderStaff
+			err := ctrl.db.Where("user_id = ? AND provider_id = ?", user.ID, orgID).First(&existingStaff).Error
+			if err == gorm.ErrRecordNotFound {
+				// 不存在，创建新记录
+				orgUUID, _ := uuid.Parse(orgID)
+				staff := models.ServiceProviderStaff{
+					UserID:     user.ID,
+					ProviderID: orgUUID,
+					Title:      "员工",
+					Status:     "active",
+				}
+				if err := ctrl.db.Create(&staff).Error; err != nil {
+					fmt.Printf("[UseInvitationCode] Failed to create service provider staff: %v\n", err)
+					// 不返回错误，因为角色已经添加成功
+				} else {
+					fmt.Printf("[UseInvitationCode] Created service provider staff record for user %s, provider %s\n", user.ID, orgID)
+				}
+			} else if err != nil {
+				fmt.Printf("[UseInvitationCode] Error checking service provider staff: %v\n", err)
+			} else {
+				fmt.Printf("[UseInvitationCode] Service provider staff already exists for user %s, provider %s\n", user.ID, orgID)
+			}
+		} else if targetRole == "MERCHANT_STAFF" && orgType == "merchant" {
+			// 创建商家员工记录
+			var existingStaff models.MerchantStaff
+			err := ctrl.db.Where("user_id = ? AND merchant_id = ?", user.ID, orgID).First(&existingStaff).Error
+			if err == gorm.ErrRecordNotFound {
+				// 不存在，创建新记录
+				orgUUID, _ := uuid.Parse(orgID)
+				staff := models.MerchantStaff{
+					UserID:     user.ID,
+					MerchantID: orgUUID,
+					Title:      "员工",
+					Status:     "active",
+				}
+				if err := ctrl.db.Create(&staff).Error; err != nil {
+					fmt.Printf("[UseInvitationCode] Failed to create merchant staff: %v\n", err)
+					// 不返回错误，因为角色已经添加成功
+				} else {
+					fmt.Printf("[UseInvitationCode] Created merchant staff record for user %s, merchant %s\n", user.ID, orgID)
+				}
+			} else if err != nil {
+				fmt.Printf("[UseInvitationCode] Error checking merchant staff: %v\n", err)
+			} else {
+				fmt.Printf("[UseInvitationCode] Merchant staff already exists for user %s, merchant %s\n", user.ID, orgID)
+			}
+		}
+	}
+
+	// 记录邀请关系（可选，用于追踪邀请历史）
+	// TODO: 可以在这里创建 InvitationRelationship 记录
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Invitation code used successfully",
-		"code": invitationCode.Code,
-		"codeType": invitationCode.CodeType,
-		"ownerId": invitationCode.OwnerID,
+		"message": "邀请码使用成功",
+		"targetRole": targetRole,
+		"organizationId": orgID,
 	})
 }
 
@@ -261,7 +398,11 @@ func (ctrl *InvitationController) UseInvitationCode(c *gin.Context) {
 func (ctrl *InvitationController) DisableInvitationCode(c *gin.Context) {
 	code := c.Param("code")
 	userID := c.GetString("userId")
-	currentRole := c.GetString("currentRole")
+	roles, err := ctrl.getUserRoles(c)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取用户角色失败"})
+		return
+	}
 
 	var invitationCode models.InvitationCode
 	result := ctrl.db.Where("code = ?", code).First(&invitationCode)
@@ -278,8 +419,17 @@ func (ctrl *InvitationController) DisableInvitationCode(c *gin.Context) {
 		return
 	}
 
+	// 检查是否有超级管理员角色
+	hasSuperAdmin := false
+	for _, role := range roles {
+		if role == "SUPER_ADMIN" {
+			hasSuperAdmin = true
+			break
+		}
+	}
+
 	// 权限检查：只有创建者或超级管理员可以禁用
-	if currentRole != "super_admin" && invitationCode.OwnerID != userID {
+	if !hasSuperAdmin && invitationCode.GeneratorID != userID {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": "Insufficient permissions",
 		})
@@ -287,7 +437,7 @@ func (ctrl *InvitationController) DisableInvitationCode(c *gin.Context) {
 	}
 
 	// 禁用邀请码
-	invitationCode.Status = "disabled"
+	invitationCode.IsActive = false
 	if err := ctrl.db.Save(&invitationCode).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "Failed to disable invitation code",
@@ -307,34 +457,34 @@ func (ctrl *InvitationController) validateOwnerID(ownerType, ownerID string) boo
 	return true
 }
 
-// canCreateInvitationCode 检查是否可以创建指定类型的邀请码
-func (ctrl *InvitationController) canCreateInvitationCode(currentRole, codeType, ownerType string) bool {
-	switch currentRole {
-	case "super_admin":
-		// 超级管理员可以创建所有类型的邀请码
-		return true
-	case "service_provider_admin":
-		// 服务商管理员可以创建商家、达人邀请码
-		return codeType == "MERCHANT" || codeType == "CREATOR" || codeType == "STAFF"
-	case "merchant_admin":
-		// 商家管理员可以创建员工邀请码
-		return codeType == "STAFF"
-	default:
-		return false
+// canCreateInvitationCode 检查是否可以创建指定类型的邀请码（基于用户拥有的所有角色）
+func (ctrl *InvitationController) canCreateInvitationCode(roles []string, codeType, ownerType string) bool {
+	// 检查用户的所有角色
+	for _, role := range roles {
+		switch role {
+		case "SUPER_ADMIN":
+			// 超级管理员可以创建所有类型的邀请码
+			return true
+		case "SERVICE_PROVIDER_ADMIN", "SP_ADMIN":
+			// 服务商管理员可以创建商家、达人邀请码
+			if codeType == "MERCHANT" || codeType == "CREATOR" || codeType == "STAFF" {
+				return true
+			}
+		case "MERCHANT_ADMIN":
+			// 商家管理员可以创建员工邀请码
+			if codeType == "STAFF" {
+				return true
+			}
+		}
 	}
+	return false
 }
 
 // GetMyFixedInvitationCodes 获取我的固定邀请码列表
 // 返回基于用户所有角色可邀请的角色类型及其对应的邀请码
 // GET /api/v1/invitations/fixed-codes
+func (ctrl *InvitationController) GetMyFixedInvitationCodes(c *gin.Context) {
 	userID := c.GetString("userId")
-	rolesInterface, _ := c.Get("roles")
-
-	// 将 interface{} 转换为 []string
-	var roles []string
-	if rolesSlice, ok := rolesInterface.([]string); ok {
-		roles = rolesSlice
-	}
 
 	// 获取用户信息
 	var user models.User
@@ -343,13 +493,14 @@ func (ctrl *InvitationController) canCreateInvitationCode(currentRole, codeType,
 		return
 	}
 
-	// 收集所有可邀请的角色（去重）
+	// 从数据库用户对象获取角色（models.Roles -> []string）
+	roles := []string(user.Roles)
+
+	// 获取所有可邀请的角色（已内置去重逻辑）
+	invitableRoles := constants.GetInvitableRoles(roles)
 	invitableRoleMap := make(map[string]constants.InvitableRole)
-	for _, role := range roles {
-		invitableRoles := constants.GetInvitableRoles(role)
-		for _, ir := range invitableRoles {
-			invitableRoleMap[ir.Role] = ir
-		}
+	for _, ir := range invitableRoles {
+		invitableRoleMap[ir.Role] = ir
 	}
 
 	if len(invitableRoleMap) == 0 {
@@ -370,9 +521,12 @@ func (ctrl *InvitationController) canCreateInvitationCode(currentRole, codeType,
 	organizations := make([]OrganizationInfo, 0)
 
 	isSuperAdmin := utils.IsSuperAdmin(&user)
+	isServiceProviderAdmin := utils.IsServiceProviderAdmin(&user)
+	isMerchantAdmin := utils.IsMerchantAdmin(&user)
 
 	// 超级管理员：获取所有服务商和商家（用于生成邀请码邀请别人成为管理员）
-	// 其他角色：获取自己是管理员的服务商/商家
+	// 服务商管理员：获取自己是管理员的服务商
+	// 商家管理员：没有服务商
 	var serviceProviders []models.ServiceProvider
 	if isSuperAdmin {
 		// 超级管理员：返回所有服务商
@@ -385,7 +539,7 @@ func (ctrl *InvitationController) canCreateInvitationCode(currentRole, codeType,
 				})
 			}
 		}
-	} else {
+	} else if isServiceProviderAdmin {
 		// 服务商管理员：返回自己是管理员的服务商
 		if err := ctrl.db.Where("admin_id = ?", userID).Find(&serviceProviders).Error; err == nil {
 			for _, sp := range serviceProviders {
@@ -399,6 +553,7 @@ func (ctrl *InvitationController) canCreateInvitationCode(currentRole, codeType,
 	}
 
 	var merchants []models.Merchant
+
 	if isSuperAdmin {
 		// 超级管理员：返回所有商家
 		if err := ctrl.db.Model(&models.Merchant{}).Find(&merchants).Error; err == nil {
@@ -410,7 +565,18 @@ func (ctrl *InvitationController) canCreateInvitationCode(currentRole, codeType,
 				})
 			}
 		}
-	} else {
+	} else if isServiceProviderAdmin {
+		// 服务商管理员：返回自己创建的商家（user_id = self）
+		if err := ctrl.db.Where("user_id = ?", userID).Find(&merchants).Error; err == nil {
+			for _, m := range merchants {
+				organizations = append(organizations, OrganizationInfo{
+					ID:   m.ID.String(),
+					Name: m.Name,
+					Type: "merchant",
+				})
+			}
+		}
+	} else if isMerchantAdmin {
 		// 商家管理员：返回自己是管理员的商家
 		if err := ctrl.db.Where("admin_id = ?", userID).Find(&merchants).Error; err == nil {
 			for _, m := range merchants {
@@ -423,47 +589,148 @@ func (ctrl *InvitationController) canCreateInvitationCode(currentRole, codeType,
 		}
 	}
 
-	// 为每个可邀请的角色生成对应的邀请码
-	type InvitationCodeWithRole struct {
-		Role          string                `json:"role"`
-		Label         string                `json:"label"`
-		Organizations []OrganizationInfo     `json:"organizations,omitempty"`
-		NeedOrg       bool                  `json:"needOrg"`
+	// 为每个可邀请的角色生成对应的邀请码（按角色和组织的组合）
+	type InvitationCodeWithOrg struct {
+		Code      string `json:"code"`
+		Role      string `json:"role"`
+		RoleLabel string `json:"roleLabel"`
+		OrgID     string `json:"orgId,omitempty"`
+		OrgName   string `json:"orgName,omitempty"`
+		OrgType   string `json:"orgType,omitempty"`
 	}
 
-	codes := make([]InvitationCodeWithRole, 0, len(invitableRoleMap))
+	codes := make([]InvitationCodeWithOrg, 0)
+
 	for _, ir := range invitableRoleMap {
 		needOrg := utils.RequiresOrganizationBinding(ir.Role)
 
-		codeInfo := InvitationCodeWithRole{
-			Role:    ir.Role,
-			Label:   ir.Label,
-			NeedOrg: needOrg,
-		}
-
 		if needOrg {
-			// 需要组织绑定：返回组织列表供选择
-			filteredOrgs := make([]OrganizationInfo, 0)
+			// 需要组织绑定：为该角色的每个组织生成一个邀请码
 			orgType := utils.GetOrganizationTypeByRole(ir.Role)
+			filteredOrgs := make([]OrganizationInfo, 0)
 
+			// 筛选该角色对应的组织
 			for _, org := range organizations {
 				if org.Type == orgType {
 					filteredOrgs = append(filteredOrgs, org)
 				}
 			}
-			codeInfo.Organizations = filteredOrgs
-			codeInfo.Code = "" // 需要选择组织后才能生成
-		} else {
-			// 不需要组织绑定（如达人）：直接生成邀请码
-			codeInfo.Code = utils.GenerateFixedInvitationCode(userID, ir.Role)
-		}
 
-		codes = append(codes, codeInfo)
+			// 为每个组织生成邀请码
+			for _, org := range filteredOrgs {
+				// 查询是否已存在该邀请码（根据 generator_id + target_role + organization_id）
+				var existingCode models.InvitationCode
+				orgUUID, _ := uuid.Parse(org.ID)
+				err := ctrl.db.Where("generator_id = ? AND target_role = ? AND organization_id = ?",
+					userID, ir.Role, orgUUID).First(&existingCode).Error
+
+				var code string
+				if err == gorm.ErrRecordNotFound {
+					// 不存在，生成新短码
+					code = utils.GenerateUserFixedInvitationCode(userID, ir.Role, org.ID)
+
+					newCode := models.InvitationCode{
+						Code:             code,
+						Type:             "FIXED",
+						TargetRole:       ir.Role,
+						GeneratorID:      userID,
+						GeneratorType:    "user",
+						OrganizationID:   &orgUUID,
+						OrganizationType: &org.Type,
+						IsActive:         true,
+						UseCount:         0,
+					}
+					if err := ctrl.db.Create(&newCode).Error; err != nil {
+						fmt.Printf("[GetMyFixedInvitationCodes] Failed to create invitation code %s: %v\n", code, err)
+						continue
+					}
+					fmt.Printf("[GetMyFixedInvitationCodes] Created invitation code %s for role %s, org %s\n", code, ir.Role, org.Name)
+				} else if err != nil {
+					fmt.Printf("[GetMyFixedInvitationCodes] Error checking invitation code: %v\n", err)
+					continue
+				} else {
+					// 已存在，使用现有邀请码
+					code = existingCode.Code
+					fmt.Printf("[GetMyFixedInvitationCodes] Reusing existing code %s for role %s, org %s\n", code, ir.Role, org.Name)
+				}
+
+				codes = append(codes, InvitationCodeWithOrg{
+					Code:      code,
+					Role:      ir.Role,
+					RoleLabel: ir.Label,
+					OrgID:     org.ID,
+					OrgName:   org.Name,
+					OrgType:   org.Type,
+				})
+			}
+		} else {
+			// 不需要组织绑定（如达人）：查询是否已存在该邀请码
+			var existingCode models.InvitationCode
+			err := ctrl.db.Where("generator_id = ? AND target_role = ? AND organization_id IS NULL",
+				userID, ir.Role).First(&existingCode).Error
+
+			var code string
+			if err == gorm.ErrRecordNotFound {
+				// 不存在，生成新短码
+				code = utils.GenerateUserFixedInvitationCode(userID, ir.Role)
+
+				newCode := models.InvitationCode{
+					Code:          code,
+					Type:          "FIXED",
+					TargetRole:    ir.Role,
+					GeneratorID:   userID,
+					GeneratorType: "user",
+					IsActive:      true,
+					UseCount:      0,
+				}
+				if err := ctrl.db.Create(&newCode).Error; err != nil {
+					fmt.Printf("[GetMyFixedInvitationCodes] Failed to create invitation code %s: %v\n", code, err)
+					continue
+				}
+				fmt.Printf("[GetMyFixedInvitationCodes] Created invitation code %s for role %s\n", code, ir.Role)
+			} else if err != nil {
+				fmt.Printf("[GetMyFixedInvitationCodes] Error checking invitation code: %v\n", err)
+				continue
+			} else {
+				// 已存在，使用现有邀请码
+				code = existingCode.Code
+				fmt.Printf("[GetMyFixedInvitationCodes] Reusing existing code %s for role %s\n", code, ir.Role)
+			}
+
+			codes = append(codes, InvitationCodeWithOrg{
+				Code:      code,
+				Role:      ir.Role,
+				RoleLabel: ir.Label,
+			})
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"invitableRoles": codes,
-		"userRoles":      roles,
-		"organizations":  organizations,
+		"invitationCodes": codes,
+		"userRoles":       roles,
+		"organizations":   organizations,
+	})
+}
+
+// GetMyInvitations 获取我发出的邀请列表
+// GET /api/v1/invitations/my
+func (ctrl *InvitationController) GetMyInvitations(c *gin.Context) {
+	userID := c.GetString("userId")
+
+	// 查询我发出的邀请
+	var invitations []models.InvitationRelationship
+	if err := ctrl.db.Where("inviter_id = ?", userID).
+		Preload("Invitee").
+		Order("invited_at DESC").
+		Find(&invitations).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "获取邀请列表失败",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"invitations": invitations,
+		"total":      len(invitations),
 	})
 }

@@ -2,7 +2,6 @@ import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { cn } from '../lib/utils'
 import { getRoleName } from '../lib/roles'
-import RoleSwitcher from './RoleSwitcher'
 import {
   LayoutDashboard,
   Gift,
@@ -28,17 +27,18 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
   const location = useLocation()
   const { user, logout } = useAuth()
 
-  const canManageInvitations = () => {
-    const role = user?.currentRole
-    return role === 'super_admin' || role === 'service_provider_admin' || role === 'merchant_admin'
-  }
+  // 多角色：按「拥有的角色」显示所有对应菜单（不再使用角色切换器）
+  const roles = user?.roles ?? []
+  const isSuperAdmin = () => roles.some((r) => r.toUpperCase() === 'SUPER_ADMIN')
+  const isMerchantAdmin = () => roles.some((r) => r.toUpperCase() === 'MERCHANT_ADMIN')
+  const isServiceProviderAdmin = () => roles.some((r) => r.toUpperCase() === 'SERVICE_PROVIDER_ADMIN')
+  const isCreator = () => roles.some((r) => r.toUpperCase() === 'CREATOR')
+  const isMerchantStaff = () => roles.some((r) => r.toUpperCase() === 'MERCHANT_STAFF')
+  const isBasicUser = () => roles.some((r) => r.toUpperCase() === 'BASIC_USER')
 
-  // 根据当前激活角色判断（切换角色后菜单会变化）
-  const isSuperAdmin = () => user?.currentRole === 'super_admin'
-  const isMerchantAdmin = () => user?.currentRole === 'merchant_admin'
-  const isServiceProviderAdmin = () => user?.currentRole === 'service_provider_admin'
-  const isCreator = () => user?.currentRole === 'creator'
-  const isMerchantStaff = () => user?.currentRole === 'merchant_staff'
+  const canManageInvitations = () => {
+    return isSuperAdmin() || isServiceProviderAdmin() || isMerchantAdmin() || isBasicUser()
+  }
 
   const navItems = [
     // 工作台 - 始终显示
@@ -47,7 +47,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       href: '/',
       icon: LayoutDashboard,
     },
-    // 达人相关
+    // 达人相关（拥有达人角色即显示）
     ...(isCreator() ? [{
       title: '任务大厅',
       href: '/task-hall',
@@ -61,11 +61,17 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       href: '/creator',
       icon: Sparkles,
     }] : []),
-    // 商家相关
-    ...(isMerchantAdmin() || isMerchantStaff() ? [{
+    // 活动创建（商家管理员、商家员工、服务商管理员）
+    ...(isMerchantAdmin() || isMerchantStaff() || isServiceProviderAdmin() ? [{
       title: '创建活动',
       href: '/create-campaign',
       icon: Sparkles,
+    }] : []),
+    // 活动审核（仅服务商管理员）
+    ...(isServiceProviderAdmin() ? [{
+      title: '活动审核',
+      href: '/campaign-approval',
+      icon: ShieldCheck,
     }] : []),
     ...(isMerchantAdmin() ? [{
       title: '商家信息',
@@ -78,13 +84,13 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
       href: '/service-provider',
       icon: Building2,
     }] : []),
-    // 商家管理（Super Admin 和服务商管理员可见）
+    // 超级管理员 / 服务商管理员
     ...(isSuperAdmin() || isServiceProviderAdmin() ? [{
       title: '商家管理',
       href: '/merchants',
       icon: Briefcase,
     }] : []),
-    // 管理功能
+    // 超级管理员专有
     ...(isSuperAdmin() ? [{
       title: '服务商管理',
       href: '/service-providers',
@@ -209,13 +215,14 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
                   {user?.nickname || '用户'}
                 </p>
                 <p className="text-xs text-gray-400 truncate">
-                  {user?.currentRole ? getRoleName(user.currentRole.toUpperCase()) : ''}
+                  {roles.length > 0
+                    ? roles.length === 1
+                      ? getRoleName(roles[0].toUpperCase())
+                      : `多角色 (${roles.length})`
+                    : ''}
                 </p>
               </div>
             </div>
-
-            {/* 角色切换按钮 */}
-            <RoleSwitcher />
 
             <button
               onClick={logout}

@@ -71,27 +71,13 @@ func GetOrganizationTypeByRole(role string) string {
 	}
 }
 
-// GenerateUserFixedInvitationCode 生成用户固定邀请码
-// 格式（需要组织绑定）: INV-{邀请人id后8位}-{被绑定组织ID}-{角色代码}
-//   例如: INV-785aa30f-provider_abc123-SP-ADMIN
-// 格式（不需要组织绑定）: INV-{邀请人id后8位}-{角色代码}
-//   例如: INV-785aa30f-CREATOR
+// GenerateUserFixedInvitationCode 生成用户固定邀请码（短码版本）
+// 生成8位随机短码，完整信息存储在数据库映射表中
+// 短码格式: 8位大写字母+数字（排除易混淆字符 0/O、1/I/l）
+//   例如: ABC123XY
 func GenerateUserFixedInvitationCode(userID string, targetRole string, organizationID ...string) string {
-	// 提取ID后8位
-	inviterSuffix := extractIDSuffix(userID, 8)
-	roleCode := GetRoleCodeByRole(targetRole)
-
-	// 判断是否需要组织绑定
-	if RequiresOrganizationBinding(targetRole) {
-		// 必须提供组织ID
-		if len(organizationID) == 0 || organizationID[0] == "" {
-			panic(fmt.Sprintf("角色 %s 需要提供组织ID", targetRole))
-		}
-		return fmt.Sprintf("INV-%s-%s-%s", inviterSuffix, organizationID[0], roleCode)
-	}
-
-	// 不需要组织绑定（如达人）
-	return fmt.Sprintf("INV-%s-%s", inviterSuffix, roleCode)
+	// 直接生成8位随机短码
+	return generateRandomString(8)
 }
 
 // ParseUserFixedInvitationCode 解析用户固定邀请码

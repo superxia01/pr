@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"pr-business/constants"
 	"pr-business/models"
 	"pr-business/utils"
 
@@ -71,13 +72,13 @@ func (ctrl *MerchantController) CreateMerchant(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查：只有超级管理员和服务商管理员可以创建商家
-	if !utils.HasRole(user, "super_admin") && !utils.HasRole(user, "sp_admin") {
+	if !utils.IsSuperAdmin(user) && !utils.IsServiceProviderAdmin(user) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限创建商家"})
 		return
 	}
 
 	// 如果是服务商管理员，只能为自己所属的服务商创建商家
-	if utils.HasRole(user, "sp_admin") && !utils.HasRole(user, "super_admin") {
+	if utils.IsServiceProviderAdmin(user) && !utils.IsSuperAdmin(user) {
 		var serviceProvider models.ServiceProvider
 		if err := ctrl.db.Where("admin_id = ?", user.ID).First(&serviceProvider).Error; err != nil {
 			c.JSON(http.StatusForbidden, gin.H{"error": "您不是服务商管理员"})
@@ -137,7 +138,7 @@ func (ctrl *MerchantController) GetMerchants(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限过滤
-	if utils.HasRole(user, "sp_admin") && !utils.HasRole(user, "super_admin") {
+	if utils.IsServiceProviderAdmin(user) && !utils.IsSuperAdmin(user) {
 		// 服务商管理员只能看到自己服务商下的商家
 		var serviceProvider models.ServiceProvider
 		if err := ctrl.db.Where("admin_id = ?", user.ID).First(&serviceProvider).Error; err == nil {
@@ -217,9 +218,9 @@ func (ctrl *MerchantController) UpdateMerchant(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查
-	hasPermission := utils.HasRole(user, "super_admin") ||
-		utils.HasRole(user, "sp_admin") ||
-		(utils.HasRole(user, "merchant_admin") && user.ID == merchant.AdminID)
+	hasPermission := utils.IsSuperAdmin(user) ||
+		utils.IsServiceProviderAdmin(user) ||
+		(utils.IsMerchantAdmin(user) && merchant.AdminID == user.ID)
 
 	if !hasPermission {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限更新商家信息"})
@@ -276,7 +277,7 @@ func (ctrl *MerchantController) DeleteMerchant(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查：只有超级管理员可以删除
-	if !utils.HasRole(user, "super_admin") {
+	if !utils.IsSuperAdmin(user) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限删除商家"})
 		return
 	}
@@ -323,7 +324,7 @@ func (ctrl *MerchantController) AddMerchantStaff(c *gin.Context) {
 	}
 
 	// 权限检查：只有商家管理员可以添加员工
-	if !utils.HasRole(user, "super_admin") && merchant.AdminID != user.ID {
+	if !utils.IsSuperAdmin(user) && merchant.AdminID != user.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限添加员工"})
 		return
 	}
@@ -431,7 +432,7 @@ func (ctrl *MerchantController) UpdateMerchantStaffPermission(c *gin.Context) {
 	}
 
 	// 权限检查：只有商家管理员可以更新员工权限
-	if !utils.HasRole(user, "super_admin") && merchant.AdminID != user.ID {
+	if !utils.IsSuperAdmin(user) && merchant.AdminID != user.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限更新员工权限"})
 		return
 	}
@@ -492,7 +493,7 @@ func (ctrl *MerchantController) DeleteMerchantStaff(c *gin.Context) {
 	}
 
 	// 权限检查：只有商家管理员可以删除员工
-	if !utils.HasRole(user, "super_admin") && merchant.AdminID != user.ID {
+	if !utils.IsSuperAdmin(user) && merchant.AdminID != user.ID {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限删除员工"})
 		return
 	}
@@ -533,4 +534,17 @@ func (ctrl *MerchantController) GetMyMerchant(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, merchant)
+}
+
+// GetPermissions 获取可用的权限列表
+// @Summary 获取权限列表
+// @Description 获取可用于授予员工的权限列表
+// @Tags 商家管理
+// @Accept json
+// @Produce json
+// @Success 200 {array} constants.PermissionDefinition
+// @Router /api/v1/merchants/permissions [get]
+func (ctrl *MerchantController) GetPermissions(c *gin.Context) {
+	// 返回所有权限定义（前端会根据员工角色过滤）
+	c.JSON(http.StatusOK, constants.GetAllPermissionDefinitions())
 }

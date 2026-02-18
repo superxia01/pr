@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"net/http"
+	"pr-business/constants"
 	"pr-business/models"
 	"pr-business/utils"
 
@@ -68,7 +69,7 @@ func (ctrl *ServiceProviderController) CreateServiceProvider(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查：只有超级管理员可以创建服务商
-	if !utils.HasRole(user, "super_admin") {
+	if !utils.IsSuperAdmin(user) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限创建服务商"})
 		return
 	}
@@ -168,8 +169,8 @@ func (ctrl *ServiceProviderController) UpdateServiceProvider(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查
-	hasPermission := utils.HasRole(user, "super_admin") ||
-		(utils.HasRole(user, "provider_admin") && user.ID == provider.AdminID)
+	hasPermission := utils.IsSuperAdmin(user) ||
+		(utils.IsServiceProviderAdmin(user) && provider.AdminID != nil && user.ID == *provider.AdminID)
 
 	if !hasPermission {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限更新服务商信息"})
@@ -223,7 +224,7 @@ func (ctrl *ServiceProviderController) DeleteServiceProvider(c *gin.Context) {
 	user := currentUser.(*models.User)
 
 	// 权限检查：只有超级管理员可以删除
-	if !utils.HasRole(user, "super_admin") {
+	if !utils.IsSuperAdmin(user) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限删除服务商"})
 		return
 	}
@@ -270,7 +271,7 @@ func (ctrl *ServiceProviderController) AddServiceProviderStaff(c *gin.Context) {
 	}
 
 	// 权限检查：只有服务商管理员可以添加员工
-	if !utils.HasRole(user, "super_admin") && provider.AdminID != user.ID {
+	if !utils.IsSuperAdmin(user) && (provider.AdminID == nil || *provider.AdminID != user.ID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限添加员工"})
 		return
 	}
@@ -378,7 +379,7 @@ func (ctrl *ServiceProviderController) UpdateServiceProviderStaffPermission(c *g
 	}
 
 	// 权限检查：只有服务商管理员可以更新员工权限
-	if !utils.HasRole(user, "super_admin") && provider.AdminID != user.ID {
+	if !utils.IsSuperAdmin(user) && (provider.AdminID == nil || *provider.AdminID != user.ID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限更新员工权限"})
 		return
 	}
@@ -439,7 +440,7 @@ func (ctrl *ServiceProviderController) DeleteServiceProviderStaff(c *gin.Context
 	}
 
 	// 权限检查：只有服务商管理员可以删除员工
-	if !utils.HasRole(user, "super_admin") && provider.AdminID != user.ID {
+	if !utils.IsSuperAdmin(user) && (provider.AdminID == nil || *provider.AdminID != user.ID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权限删除员工"})
 		return
 	}
@@ -480,4 +481,17 @@ func (ctrl *ServiceProviderController) GetMyServiceProvider(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, provider)
+}
+
+// GetPermissions 获取可用的权限列表
+// @Summary 获取权限列表
+// @Description 获取可用于授予员工的权限列表
+// @Tags 服务商管理
+// @Accept json
+// @Produce json
+// @Success 200 {array} constants.PermissionDefinition
+// @Router /api/v1/service-providers/permissions [get]
+func (ctrl *ServiceProviderController) GetPermissions(c *gin.Context) {
+	// 返回所有权限定义（前端会根据员工角色过滤）
+	c.JSON(http.StatusOK, constants.GetAllPermissionDefinitions())
 }

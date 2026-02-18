@@ -5,9 +5,13 @@ import { DataTable } from '../components/ui/data-table'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
+import { Link } from 'react-router-dom'
+import { useToast } from '../contexts/ToastContext'
 
 export default function MyTasks() {
+  const toast = useToast()
   const [tasks, setTasks] = useState<Task[]>([])
+  const [needCreatorSetup, setNeedCreatorSetup] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<string>('ALL')
@@ -21,127 +25,14 @@ export default function MyTasks() {
   }, [filter])
 
   const loadTasks = async () => {
-    // 🔴 开发模式：使用模拟数据
-    if (import.meta.env.DEV) {
-      setTimeout(() => {
-        const mockTasks: any[] = [
-          {
-            id: 'task_001',
-            campaignId: 'campaign_001',
-            creatorId: 'usr_001',
-            platform: 'xiaohongshu',
-            contentType: 'POST',
-            status: 'ASSIGNED',
-            dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            campaign: {
-              id: 'campaign_001',
-              title: '春季新品推广活动',
-              merchantId: 'mch_001',
-              providerId: 'sp_001',
-              requirements: '需要发布小红书图文，至少200字，3张图片',
-              platforms: 'xiaohongshu',
-              taskAmount: 100,
-              campaignAmount: 50000,
-              creatorAmount: 100,
-              staffReferralAmount: 10,
-            },
-            requirements: {
-              minWords: 200,
-              minImages: 3,
-              hashtags: ['春季', '新品', '推荐'],
-            },
-          },
-          {
-            id: 'task_002',
-            campaignId: 'campaign_002',
-            creatorId: 'usr_001',
-            platform: 'douyin',
-            contentType: 'VIDEO',
-            status: 'SUBMITTED',
-            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            campaign: {
-              id: 'campaign_002',
-              title: '品牌短视频挑战',
-              merchantId: 'mch_002',
-              providerId: 'sp_001',
-              requirements: '制作品牌相关短视频，时长至少30秒',
-              platforms: 'douyin',
-              taskAmount: 50,
-              campaignAmount: 30000,
-              creatorAmount: 200,
-              staffReferralAmount: 20,
-            },
-            requirements: {
-              minDuration: 30,
-              hashtags: ['品牌', '挑战'],
-            },
-            submission: {
-              id: 'sub_001',
-              platformUrl: 'https://douyin.com/video/123',
-              notes: '已完成视频创作',
-              submittedAt: new Date().toISOString(),
-            },
-          },
-          {
-            id: 'task_003',
-            campaignId: 'campaign_001',
-            creatorId: 'usr_001',
-            platform: 'xiaohongshu',
-            contentType: 'POST',
-            status: 'APPROVED',
-            dueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-            createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-            updatedAt: new Date().toISOString(),
-            campaign: {
-              id: 'campaign_001',
-              title: '春季新品推广活动',
-              merchantId: 'mch_001',
-              providerId: 'sp_001',
-              requirements: '需要发布小红书图文，至少200字，3张图片',
-              platforms: 'xiaohongshu',
-              taskAmount: 100,
-              campaignAmount: 50000,
-              creatorAmount: 100,
-              staffReferralAmount: 10,
-            },
-            requirements: {
-              minWords: 200,
-              minImages: 3,
-            },
-            submission: {
-              id: 'sub_002',
-              platformUrl: 'https://xiaohongshu.com/post/456',
-              notes: '已发布',
-              submittedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-              reviewedAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-            },
-          },
-        ]
-
-        // 根据筛选条件过滤
-        let filteredTasks = mockTasks
-        if (filter && filter !== 'ALL') {
-          filteredTasks = mockTasks.filter(task => task.status === filter)
-        }
-
-        setTasks(filteredTasks)
-        setLoading(false)
-        console.log('🔴 开发模式：使用模拟任务数据', filteredTasks.length, '条')
-      }, 500)
-      return
-    }
-
-    // 生产模式：调用真实 API
     setLoading(true)
     setError(null)
+    setNeedCreatorSetup(false)
     try {
       const params = filter && filter !== 'ALL' ? { status: filter } : undefined
       const response = await taskApi.getMyTasks(params)
-      setTasks(response)
+      setTasks(response.tasks)
+      setNeedCreatorSetup(response.needCreatorSetup === true)
     } catch (err: any) {
       setError(err.response?.data?.error || '加载任务失败')
     } finally {
@@ -157,14 +48,14 @@ export default function MyTasks() {
         platformUrl,
         notes,
       })
-      alert('提交成功！')
+      toast.showSuccess('提交成功！')
       setSubmitModalOpen(false)
       setSelectedTask(null)
       setPlatformUrl('')
       setNotes('')
       loadTasks()
     } catch (err: any) {
-      alert(err.response?.data?.error || '提交失败')
+      toast.showError(err.response?.data?.error || '提交失败')
     }
   }
 
@@ -247,7 +138,20 @@ export default function MyTasks() {
               </div>
             )}
 
-            {!loading && tasks.length === 0 && (
+            {!loading && needCreatorSetup && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-800 px-4 py-4 rounded-lg mb-4">
+                <p className="font-medium">请先完善达人信息</p>
+                <p className="mt-1 text-sm">您已拥有达人角色，但尚未填写达人档案。请先前往达人中心完善信息后再查看任务。</p>
+                <Link
+                  to="/creator"
+                  className="mt-3 inline-block px-4 py-2 bg-amber-600 text-white rounded-md hover:bg-amber-700 text-sm font-medium"
+                >
+                  去填写达人信息
+                </Link>
+              </div>
+            )}
+
+            {!loading && !needCreatorSetup && tasks.length === 0 && (
               <div className="text-center py-12 bg-gray-50 rounded-lg">
                 <p className="text-gray-500">暂无任务</p>
               </div>

@@ -1,24 +1,8 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { serviceProviderApi } from '../services/api'
-import type { ServiceProvider, User } from '../types'
-
-// 辅助函数：创建完整 User 对象
-const createMockUser = (id: string, nickname: string): User => ({
-  id,
-  nickname,
-  authCenterUserId: '',
-  avatarUrl: '',
-  profile: {},
-  roles: [],
-  currentRole: '',
-  lastUsedRole: '',
-  status: 'active',
-  lastLoginAt: null,
-  lastLoginIp: '',
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-})
+import type { ServiceProvider } from '../types'
 import { DataTable } from '../components/ui/data-table'
 import { Button } from '../components/ui/button'
 import { Input } from '../components/ui/input'
@@ -45,41 +29,6 @@ export default function ServiceProviders() {
   }, [])
 
   const loadProviders = async () => {
-    // 🔴 开发模式：使用模拟数据
-    if (import.meta.env.DEV) {
-      setTimeout(() => {
-        const mockProviders: any[] = [
-          {
-            id: 'sp_001',
-            name: '测试服务商A',
-            adminId: 'usr_001',
-            userId: 'usr_001',
-            description: '这是一个测试服务商',
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            admin: createMockUser('usr_001', '管理员A'),
-          },
-          {
-            id: 'sp_002',
-            name: '测试服务商B',
-            adminId: 'usr_002',
-            userId: 'usr_002',
-            description: '另一个测试服务商',
-            status: 'active',
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            admin: createMockUser('usr_002', '管理员B'),
-          },
-        ]
-        setProviders(mockProviders)
-        setLoading(false)
-        console.log('🔴 开发模式：使用模拟服务商数据')
-      }, 500)
-      return
-    }
-
-    // 生产模式：调用真实 API
     try {
       setLoading(true)
       const data = await serviceProviderApi.getServiceProviders()
@@ -200,12 +149,8 @@ export default function ServiceProviders() {
       header: '操作',
       cell: ({ row }: { row: ServiceProvider }) => (
         <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => window.location.href = `/service-provider/${row.id}`}
-          >
-            查看详情
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={`/service-provider/${row.id}`}>查看详情</Link>
           </Button>
           <Button
             variant="ghost"
@@ -220,13 +165,17 @@ export default function ServiceProviders() {
     },
   ]
 
-  // 只有超级管理员可以访问
-  if (user?.currentRole !== 'super_admin') {
+  // 超级管理员和服务商管理员可以访问
+  const canAccess = user?.roles.some(r =>
+    r.toUpperCase() === 'SUPER_ADMIN' || r.toUpperCase() === 'SERVICE_PROVIDER_ADMIN'
+  )
+
+  if (!canAccess) {
     return (
       <div className="min-h-screen bg-background p-8">
         <div className="max-w-7xl mx-auto">
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-            您没有权限访问此页面
+            您不是服务商管理员
           </div>
         </div>
       </div>

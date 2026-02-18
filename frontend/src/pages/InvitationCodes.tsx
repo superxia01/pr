@@ -3,7 +3,6 @@ import { useAuth } from '../contexts/AuthContext'
 import { invitationApi } from '../services/api'
 import { Button } from '../components/ui/button'
 import { Badge } from '../components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select'
 
 interface InvitationRelationship {
 	id: string
@@ -23,23 +22,18 @@ interface InvitationRelationship {
 	}
 }
 
-interface Organization {
-	id: string
-	name: string
-	type: string
-}
-
-interface InvitableRole {
-	role: string
+interface InvitationCode {
 	code: string
-	label: string
-	organizations?: Organization[]
-	needOrg?: boolean
+	role: string
+	roleLabel: string
+	orgId?: string
+	orgName?: string
+	orgType?: string
 }
 
 export default function InvitationCodes() {
 	const { user } = useAuth()
-	const [invitableRoles, setInvitableRoles] = useState<InvitableRole[]>([])
+	const [invitationCodes, setInvitationCodes] = useState<InvitationCode[]>([])
 	const [invitations, setInvitations] = useState<InvitationRelationship[]>([])
 	const [loading, setLoading] = useState(true)
 	const [error, setError] = useState('')
@@ -47,12 +41,6 @@ export default function InvitationCodes() {
 	const [currentPage, setCurrentPage] = useState(1)
 	const [total, setTotal] = useState(0)
 	const pageSize = 20
-
-	// 存储每个角色选择的组织ID
-	const [selectedOrgs, setSelectedOrgs] = useState<Record<string, string>>({})
-
-	// 生成后的邀请码缓存
-	const [generatedCodes, setGeneratedCodes] = useState<Record<string, string>>({})
 
 	useEffect(() => {
 		loadMyFixedInvitationCodes()
@@ -63,7 +51,7 @@ export default function InvitationCodes() {
 		try {
 			setLoading(true)
 			const response = await invitationApi.getMyFixedInvitationCodes()
-			setInvitableRoles(response.invitableRoles || [])
+			setInvitationCodes(response.invitationCodes || [])
 		} catch (err: any) {
 			setError(err.response?.data?.error || '加载邀请码失败')
 		} finally {
@@ -86,32 +74,6 @@ export default function InvitationCodes() {
 		} finally {
 			setLoading(false)
 		}
-	}
-
-	// 选择组织后生成邀请码
-	const handleOrganizationSelect = (role: string, orgId: string) => {
-		setSelectedOrgs(prev => ({ ...prev, [role]: orgId }))
-
-		// 生成邀请码
-		if (user && orgId) {
-			const code = generateInvitationCode(user.id, role, orgId)
-			setGeneratedCodes(prev => ({ ...prev, [role]: code }))
-		}
-	}
-
-	// 生成邀请码（前端生成）
-	const generateInvitationCode = (userId: string, role: string, orgId: string): string => {
-		// INV-{用户ID后8位}-{组织ID}-{角色代码}
-		const userIdSuffix = userId.slice(-8)
-		const roleCodeMap: Record<string, string> = {
-			'SERVICE_PROVIDER_ADMIN': 'SP-ADMIN',
-			'SERVICE_PROVIDER_STAFF': 'SP-STAFF',
-			'MERCHANT_ADMIN': 'M-ADMIN',
-			'MERCHANT_STAFF': 'M-STAFF',
-			'CREATOR': 'CREATOR',
-		}
-		const roleCode = roleCodeMap[role] || role
-		return `INV-${userIdSuffix}-${orgId}-${roleCode}`
 	}
 
 	const handleCopyCode = async (code: string) => {
@@ -209,108 +171,57 @@ export default function InvitationCodes() {
 				<div className="mb-8 bg-card rounded-lg border p-6">
 					<h2 className="text-xl font-bold mb-4">我的邀请码</h2>
 					<p className="text-sm text-muted-foreground mb-4">
-						根据您的角色和管理组织，可以邀请不同类型的用户。
-						涉及组织绑定的邀请码需要先选择组织。
+						根据您的角色和管理组织，系统已为您生成以下邀请码。
 					</p>
 
-					{invitableRoles.length === 0 ? (
+					{invitationCodes.length === 0 ? (
 						<div className="text-center py-8 text-sm text-muted-foreground">
 							您当前的角色无法邀请他人
 						</div>
 					) : (
-						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-							{invitableRoles.map((ir) => (
-								<div key={ir.role} className="border rounded-lg p-4 bg-muted/30">
-									<div className="flex items-center justify-between mb-2">
+						<div className="space-y-3">
+							{invitationCodes.map((ic) => (
+								<div key={ic.code} className="border rounded-lg p-4 bg-muted/30">
+									<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+										{/* 角色信息 */}
 										<div>
-											<div className="text-sm text-muted-foreground">邀请角色</div>
-											<div className="text-lg font-bold">{ir.label}</div>
+											<div className="text-xs text-muted-foreground mb-1">邀请角色</div>
+											<div className="text-lg font-bold">{ic.roleLabel}</div>
 										</div>
-										<Badge>{getRoleLabel(user.currentRole || '')}</Badge>
-									</div>
-									<div className="space-y-3">
-										{/* 需要组织选择 */}
-										{ir.needOrg ? (
-											<>
-												<div>
-													<div className="text-xs text-muted-foreground mb-1">选择组织</div>
-													{ir.organizations && ir.organizations.length > 0 ? (
-														<Select
-															value={selectedOrgs[ir.role]}
-															onValueChange={(value) => handleOrganizationSelect(ir.role, value)}
-														>
-															<SelectTrigger className="w-full">
-																<SelectValue placeholder="请选择组织" />
-															</SelectTrigger>
-															<SelectContent>
-																{ir.organizations.map((org) => (
-																	<SelectItem key={org.id} value={org.id}>
-																		{org.name}
-																	</SelectItem>
-																))}
-															</SelectContent>
-														</Select>
-													) : (
-														<div className="text-sm text-muted-foreground">
-															暂无可用组织
-														</div>
-													)}
-												</div>
-												{/* 显示生成的邀请码 */}
-												{generatedCodes[ir.role] && (
-													<div>
-														<div className="text-xs text-muted-foreground mb-1">邀请码</div>
-														<div className="flex items-center gap-2">
-															<code className="flex-1 px-3 py-2 bg-background rounded text-sm font-mono text-center break-all">
-																{generatedCodes[ir.role]}
-															</code>
-															<Button
-																variant="ghost"
-																size="sm"
-																onClick={() => handleCopyCode(generatedCodes[ir.role]!)}
-															>
-																{copiedCode === generatedCodes[ir.role] ? (
-																	<span className="text-green-600">✓ 已复制</span>
-																) : (
-																	<>
-																		<svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																			<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 12-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8" />
-																		</svg>
-																		复制
-																	</>
-																)}
-															</Button>
-														</div>
-													</div>
-												)}
-											</>
-										) : (
-											// 不需要组织绑定（如达人），直接显示邀请码
+
+										{/* 组织信息（如果有） */}
+										{ic.orgName && (
 											<div>
-												<div className="text-xs text-muted-foreground mb-1">邀请码</div>
-												<div className="flex items-center gap-2">
-													<code className="flex-1 px-3 py-2 bg-background rounded text-lg font-mono text-center break-all">
-														{ir.code}
-													</code>
-													<Button
-														variant="ghost"
-														size="sm"
-														onClick={() => handleCopyCode(ir.code)}
-													>
-														{copiedCode === ir.code ? (
-															<span className="text-green-600">✓ 已复制</span>
-														) : (
-															<>
-																<svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																	<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 12-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8" />
-																</svg>
-																复制
-															</>
-														)}
-													</Button>
-												</div>
+												<div className="text-xs text-muted-foreground mb-1">绑定组织</div>
+												<div className="text-sm font-medium">{ic.orgName}</div>
 											</div>
 										)}
+
+										{/* 邀请码 */}
+										<div className="md:col-span-2">
+											<div className="text-xs text-muted-foreground mb-1">邀请码</div>
+											<div className="flex items-center gap-2">
+												<code className="flex-1 px-3 py-2 bg-background rounded text-sm font-mono text-center break-all">
+													{ic.code}
+												</code>
+												<Button
+													variant="ghost"
+													size="sm"
+													onClick={() => handleCopyCode(ic.code)}
+												>
+													{copiedCode === ic.code ? (
+														<span className="text-green-600">✓ 已复制</span>
+													) : (
+														<>
+															<svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 12-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8" />
+															</svg>
+															复制
+														</>
+													)}
+												</Button>
+											</div>
+										</div>
 									</div>
 								</div>
 							))}

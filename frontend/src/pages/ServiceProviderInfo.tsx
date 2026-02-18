@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { serviceProviderApi } from '../services/api'
+import { PermissionDialog } from '../components/PermissionDialog'
 import type { ServiceProvider, ServiceProviderStaff } from '../types'
 
 export default function ServiceProviderInfo() {
@@ -8,7 +10,8 @@ export default function ServiceProviderInfo() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [editMode, setEditMode] = useState(false)
-  const [showAddStaff, setShowAddStaff] = useState(false)
+  const [permissionDialogOpen, setPermissionDialogOpen] = useState(false)
+  const [selectedStaff, setSelectedStaff] = useState<ServiceProviderStaff | null>(null)
 
   useEffect(() => {
     loadData()
@@ -42,17 +45,6 @@ export default function ServiceProviderInfo() {
     }
   }
 
-  const handleAddStaff = async (staffData: any) => {
-    if (!provider) return
-    try {
-      await serviceProviderApi.addServiceProviderStaff(provider.id, staffData)
-      setShowAddStaff(false)
-      loadData()
-    } catch (err: any) {
-      alert(err.response?.data?.error || '添加失败')
-    }
-  }
-
   const handleDeleteStaff = async (staffId: string) => {
     if (!provider || !confirm('确定要删除此员工吗？')) return
     try {
@@ -60,6 +52,46 @@ export default function ServiceProviderInfo() {
       loadData()
     } catch (err: any) {
       alert(err.response?.data?.error || '删除失败')
+    }
+  }
+
+  const handleOpenPermissionDialog = (staffMember: ServiceProviderStaff) => {
+    setSelectedStaff(staffMember)
+    setPermissionDialogOpen(true)
+  }
+
+  const handleManagePermissions = async (permissions: string[]) => {
+    if (!provider || !selectedStaff) return
+
+    try {
+      // Get current permissions
+      const currentPermissions = selectedStaff.permissions?.map(p => p.permissionCode) || []
+
+      // Grant new permissions
+      for (const permCode of permissions) {
+        if (!currentPermissions.includes(permCode)) {
+          await serviceProviderApi.updateServiceProviderStaffPermission(
+            provider.id,
+            selectedStaff.id,
+            { permissionCode: permCode, action: 'grant' }
+          )
+        }
+      }
+
+      // Revoke removed permissions
+      for (const permCode of currentPermissions) {
+        if (!permissions.includes(permCode)) {
+          await serviceProviderApi.updateServiceProviderStaffPermission(
+            provider.id,
+            selectedStaff.id,
+            { permissionCode: permCode, action: 'revoke' }
+          )
+        }
+      }
+
+      loadData()
+    } catch (err: any) {
+      throw err
     }
   }
 
@@ -166,12 +198,12 @@ export default function ServiceProviderInfo() {
             <div className="bg-white rounded-lg shadow p-6">
               <div className="flex justify-between items-center mb-4">
                 <h2 className="text-lg font-medium text-gray-900">员工管理</h2>
-                <button
-                  onClick={() => setShowAddStaff(true)}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                <Link
+                  to="/invitations"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 inline-block"
                 >
-                  添加员工
-                </button>
+                  邀请员工
+                </Link>
               </div>
               {staff.length === 0 ? (
                 <div className="text-center py-12 bg-gray-50 rounded-lg">
@@ -219,7 +251,12 @@ export default function ServiceProviderInfo() {
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <button className="text-blue-600 hover:text-blue-900 mr-3">编辑权限</button>
+                            <button
+                              onClick={() => handleOpenPermissionDialog(s)}
+                              className="text-blue-600 hover:text-blue-900 mr-3"
+                            >
+                              管理权限
+                            </button>
                             <button
                               onClick={() => handleDeleteStaff(s.id)}
                               className="text-red-600 hover:text-red-900"
@@ -234,19 +271,6 @@ export default function ServiceProviderInfo() {
                 </div>
               )}
             </div>
-
-            {/* 添加员工对话框 */}
-            {showAddStaff && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-                  <h3 className="text-lg font-medium text-gray-900 mb-4">添加员工</h3>
-                  <AddStaffForm
-                    onSave={handleAddStaff}
-                    onCancel={() => setShowAddStaff(false)}
-                  />
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
@@ -299,6 +323,18 @@ export default function ServiceProviderInfo() {
               </div>
             </div>
           </div>
+        )}
+
+        {/* 权限管理对话框 */}
+        {selectedStaff && (
+          <PermissionDialog
+            open={permissionDialogOpen}
+            onOpenChange={setPermissionDialogOpen}
+            staffName={selectedStaff.user?.nickname || selectedStaff.userId}
+            staffRole="SERVICE_PROVIDER_STAFF"
+            currentPermissions={selectedStaff.permissions?.map(p => p.permissionCode) || []}
+            onSave={handleManagePermissions}
+          />
         )}
       </div>
     </div>
@@ -372,67 +408,6 @@ function EditProviderForm({
           className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
           保存
-        </button>
-      </div>
-    </form>
-  )
-}
-
-// 添加员工表单
-function AddStaffForm({
-  onSave,
-  onCancel
-}: {
-  onSave: (data: any) => void
-  onCancel: () => void
-}) {
-  const [formData, setFormData] = useState({
-    userId: '',
-    title: '',
-    permissions: [] as string[],
-  })
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSave(formData)
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div>
-        <label htmlFor="userId" className="block text-sm font-medium text-gray-700">用户ID</label>
-        <input
-          id="userId"
-          type="text"
-          value={formData.userId}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, userId: e.target.value })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-          required
-        />
-      </div>
-      <div>
-        <label htmlFor="title" className="block text-sm font-medium text-gray-700">职位</label>
-        <input
-          id="title"
-          type="text"
-          value={formData.title}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, title: e.target.value })}
-          className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm border p-2"
-        />
-      </div>
-      <div className="flex justify-end space-x-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-        >
-          取消
-        </button>
-        <button
-          type="submit"
-          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-        >
-          添加
         </button>
       </div>
     </form>

@@ -61,7 +61,7 @@ func (ctrl *WithdrawalController) CreateWithdrawal(c *gin.Context) {
 
 	// 1. 确定用户的积分账户类型
 	var accountType models.OwnerType
-	if utils.IsSuperAdmin(user) || utils.HasRole(user, "admin") {
+	if utils.IsSuperAdmin(user) {
 		accountType = models.OwnerTypeUserPersonal // 超管使用个人账户
 	} else if utils.IsServiceProviderAdmin(user) {
 		accountType = models.OwnerTypeOrgProvider
@@ -91,17 +91,11 @@ func (ctrl *WithdrawalController) CreateWithdrawal(c *gin.Context) {
 		return
 	}
 
-	// 3. 检查余额是否足够
-	if account.Balance < req.Amount {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "积分余额不足"})
-		return
-	}
-
-	// 4. 计算手续费（这里简单处理：0手续费，实际可以根据金额和方式计算）
+	// 3. 计算手续费（这里简单处理：0手续费，实际可以根据金额和方式计算）
 	fee := 0
 	actualAmount := req.Amount - fee
 
-	// 5. 序列化账户信息并计算哈希
+	// 4. 序列化账户信息并计算哈希
 	accountInfoBytes, err := json.Marshal(req.AccountInfo)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid account info"})
@@ -111,53 +105,72 @@ func (ctrl *WithdrawalController) CreateWithdrawal(c *gin.Context) {
 	hash := sha256.Sum256([]byte(accountInfoStr))
 	accountInfoHash := hex.EncodeToString(hash[:])
 
-	// 6. 创建提现记录
-	withdrawal := models.Withdrawal{
-		AccountID:       account.ID,
-		Amount:          req.Amount,
-		Fee:             fee,
-		ActualAmount:    actualAmount,
-		Method:          req.Method,
-		AccountInfo:     accountInfoStr,
-		AccountInfoHash: accountInfoHash,
-		Status:          models.WithdrawalStatusPending,
-	}
+	var withdrawal models.Withdrawal
 
-	if err := ctrl.DB.Create(&withdrawal).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create withdrawal"})
-		return
-	}
-
-	// 7. 冻结积分（从balance转入frozen_balance）
+	// 5. 冻结积分（在事务内检查余额并更新，防止竞态条件）
 	err = ctrl.DB.Transaction(func(tx *gorm.DB) error {
-		// 扣除可用余额
-		if err := tx.Model(&account).Update("balance", gorm.Expr("balance - ?", req.Amount)).Error; err != nil {
+		// 使用行锁重新获取账户
+		var lockedAccount models.CreditAccount
+		if err := tx.Where("id = ?", account.ID).First(&lockedAccount).Error; err != nil {
 			return err
 		}
+
+		// 在锁内检查余额
+		if lockedAccount.Balance < req.Amount {
+			return errors.New("积分余额不足")
+		}
+
+		// 扣除可用余额
+		lockedAccount.Balance -= req.Amount
 		// 增加冻结余额
-		if err := tx.Model(&account).Update("frozen_balance", gorm.Expr("frozen_balance + ?", req.Amount)).Error; err != nil {
+		lockedAccount.FrozenBalance += req.Amount
+
+		// 保存账户更新
+		if err := tx.Save(&lockedAccount).Error; err != nil {
+			return err
+		}
+
+		// 创建提现记录
+		withdrawal = models.Withdrawal{
+			AccountID:       account.ID,
+			Amount:          req.Amount,
+			Fee:             fee,
+			ActualAmount:    actualAmount,
+			Method:          req.Method,
+			AccountInfo:     accountInfoStr,
+			AccountInfoHash: accountInfoHash,
+			Status:          models.WithdrawalStatusPending,
+		}
+
+		if err := tx.Create(&withdrawal).Error; err != nil {
 			return err
 		}
 
 		// 记录冻结流水
 		transaction := models.CreditTransaction{
-			AccountID:       account.ID,
-			Type:            "WITHDRAW_FREEZE",
-			Amount:          -req.Amount,
-			BalanceBefore:   account.Balance,
-			BalanceAfter:    account.Balance - req.Amount,
-			Description:     fmt.Sprintf("提现申请 %d 积分", req.Amount),
+			AccountID:        account.ID,
+			Type:             "WITHDRAW_FREEZE",
+			Amount:           -req.Amount,
+			BalanceBefore:    lockedAccount.Balance,
+			BalanceAfter:     lockedAccount.Balance - req.Amount,
+			Description:      fmt.Sprintf("提现申请 %d 积分", req.Amount),
 			TransactionGroupID: func() *uuid.UUID { id := uuid.New(); return &id }(),
 		}
 		if err := tx.Create(&transaction).Error; err != nil {
 			return err
 		}
 
+		// 更新外部 account 指针
+		account = &lockedAccount
 		return nil
 	})
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to freeze balance"})
+		if err.Error() == "积分余额不足" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "积分余额不足"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to freeze balance"})
+		}
 		return
 	}
 
@@ -193,7 +206,7 @@ func (ctrl *WithdrawalController) GetWithdrawals(c *gin.Context) {
 	query := ctrl.DB.Model(&models.Withdrawal{})
 
 	// 超管可以查看所有记录，其他用户只能查看自己的记录
-	if !utils.IsSuperAdmin(user) && !utils.HasRole(user, "admin") {
+	if !utils.IsSuperAdmin(user) {
 		// 需要先获取用户的积分账户ID
 		var accountType models.OwnerType
 		if utils.IsServiceProviderAdmin(user) {
@@ -238,8 +251,8 @@ func (ctrl *WithdrawalController) GetWithdrawals(c *gin.Context) {
 	query.Count(&total)
 
 	// 分页查询
-	offset := (parseInt(page) - 1) * parseInt(pageSize)
-	if err := query.Order("created_at DESC").Offset(offset).Limit(parseInt(pageSize)).Find(&withdrawals).Error; err != nil {
+	offset := (parseWithdrawalInt(page) - 1) * parseWithdrawalInt(pageSize)
+	if err := query.Order("created_at DESC").Offset(offset).Limit(parseWithdrawalInt(pageSize)).Find(&withdrawals).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get withdrawals"})
 		return
 	}
@@ -266,11 +279,11 @@ func (ctrl *WithdrawalController) GetWithdrawal(c *gin.Context) {
 	}
 
 	// 权限检查：超管可以查看所有，其他用户只能查看自己的
-	if !utils.HasRole(user, "SUPER_ADMIN") {
+	if !utils.IsSuperAdmin(user) {
 		var accountType models.OwnerType
-		if utils.HasRole(user, "SP_ADMIN") {
+		if utils.IsServiceProviderAdmin(user) {
 			accountType = models.OwnerTypeOrgProvider
-		} else if utils.HasRole(user, "MERCHANT_ADMIN") || utils.HasRole(user, "MERCHANT_STAFF") {
+		} else if utils.IsMerchantAdmin(user) || utils.IsMerchantStaff(user) {
 			accountType = models.OwnerTypeOrgMerchant
 		} else {
 			accountType = models.OwnerTypeUserPersonal
@@ -301,7 +314,7 @@ func (ctrl *WithdrawalController) AuditWithdrawal(c *gin.Context) {
 	user := c.MustGet("user").(*models.User)
 
 	// 只有超管可以审核
-	if !utils.HasRole(user, "SUPER_ADMIN") {
+	if !utils.IsSuperAdmin(user) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权审核提现申请"})
 		return
 	}
@@ -414,7 +427,7 @@ func (ctrl *WithdrawalController) ProcessWithdrawal(c *gin.Context) {
 	user := c.MustGet("user").(*models.User)
 
 	// 只有超管可以打款
-	if !utils.HasRole(user, "SUPER_ADMIN") {
+	if !utils.IsSuperAdmin(user) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "无权处理打款"})
 		return
 	}
@@ -492,8 +505,8 @@ func (ctrl *WithdrawalController) ProcessWithdrawal(c *gin.Context) {
 	})
 }
 
-// parseInt 辅助函数：字符串转int
-func parseInt(s string) int {
+// parseWithdrawalInt 辅助函数：字符串转int
+func parseWithdrawalInt(s string) int {
 	var result int
 	fmt.Sscanf(s, "%d", &result)
 	return result
@@ -511,7 +524,6 @@ func (ctrl *WithdrawalController) findOrCreateAccount(ownerID uuid.UUID, ownerTy
 		account := &models.CreditAccount{
 			OwnerID:       ownerID,
 			OwnerType:     ownerType,
-			UserID:        &userID,
 			Balance:       0,
 			FrozenBalance: 0,
 		}

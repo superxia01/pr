@@ -18,17 +18,13 @@ const (
 
 // CreditAccount 积分账户模型
 type CreditAccount struct {
-	ID                uuid.UUID  `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
-	OwnerID           uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_owner_type" json:"ownerId"`
-	OwnerType         OwnerType  `gorm:"type:varchar(20);not null;uniqueIndex:idx_owner_type;index" json:"ownerType"`
-	UserID            *uuid.UUID `gorm:"type:uuid;not null;uniqueIndex" json:"userId,omitempty"`
-	Balance           int        `gorm:"type:int;not null;default:0;check:balance >= 0" json:"balance"`
-	FrozenBalance     int        `gorm:"type:int;not null;default:0;check:frozen_balance >= 0" json:"frozenBalance"`
-	GoldCoins         int16      `gorm:"type:smallint;not null;default:0" json:"goldCoins"`
-	FrozenGoldCoins   int16      `gorm:"type:smallint;not null;default:0" json:"frozenGoldCoins"`
-	DiamondCredits    int64      `gorm:"type:bigint;not null;default:0" json:"diamondCredits"`
-	CreatedAt         time.Time  `gorm:"not null;default:now()" json:"createdAt"`
-	UpdatedAt         time.Time  `gorm:"not null;default:now()" json:"updatedAt"`
+	ID            uuid.UUID  `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
+	OwnerID       uuid.UUID  `gorm:"type:uuid;not null;uniqueIndex:idx_owner_type" json:"ownerId"`
+	OwnerType     OwnerType  `gorm:"type:varchar(20);not null;uniqueIndex:idx_owner_type;index" json:"ownerType"`
+	Balance       int        `gorm:"type:int;not null;default:0;check:balance >= 0" json:"balance"`
+	FrozenBalance int        `gorm:"type:int;not null;default:0;check:frozen_balance >= 0" json:"frozenBalance"`
+	CreatedAt     time.Time  `gorm:"not null;default:now()" json:"createdAt"`
+	UpdatedAt     time.Time  `gorm:"not null;default:now()" json:"updatedAt"`
 }
 
 // TableName 指定表名
@@ -111,4 +107,6 @@ const (
 	TransactionWithdrawFreeze  = "WITHDRAW_FREEZE"   // 提现冻结
 	TransactionWithdrawRefund  = "WITHDRAW_REFUND"   // 提现拒绝
 	TransactionBonusGift       = "BONUS_GIFT"        // 系统赠送
+	TransactionCampaignFreeze  = "CAMPAIGN_FREEZE"   // 活动冻结
+	TransactionCampaignRefund  = "CAMPAIGN_REFUND"   // 活动退还
 )

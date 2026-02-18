@@ -11,9 +11,19 @@ import (
 type CampaignStatus string
 
 const (
-	CampaignStatusDraft  CampaignStatus = "DRAFT"  // 草稿
-	CampaignStatusOpen   CampaignStatus = "OPEN"   // 开放中
-	CampaignStatusClosed CampaignStatus = "CLOSED" // 已关闭
+	CampaignStatusDraft          CampaignStatus = "DRAFT"           // 草稿
+	CampaignStatusPendingApproval CampaignStatus = "PENDING_APPROVAL" // 待审核
+	CampaignStatusOpen           CampaignStatus = "OPEN"            // 开放中
+	CampaignStatusClosed         CampaignStatus = "CLOSED"          // 已关闭
+)
+
+// CampaignInvitationStatus 活动邀请码状态
+type CampaignInvitationStatus string
+
+const (
+	CampaignInvitationStatusActive   CampaignInvitationStatus = "active"   // 有效
+	CampaignInvitationStatusInactive CampaignInvitationStatus = "inactive" // 失效
+	CampaignInvitationStatusUsed     CampaignInvitationStatus = "used"     // 已使用
 )
 
 // Campaign 营销活动模型
@@ -21,6 +31,8 @@ type Campaign struct {
 	ID                  uuid.UUID      `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()" json:"id"`
 	MerchantID          uuid.UUID      `gorm:"type:uuid;not null;index" json:"merchantId"`
 	ProviderID          *uuid.UUID     `gorm:"type:uuid;index" json:"providerId"`
+	CreatedBy           string         `gorm:"type:varchar(255);not null" json:"createdBy"`
+	CreatorType         string         `gorm:"type:varchar(50);not null" json:"creatorType"`
 	Title               string         `gorm:"type:varchar(100);not null" json:"title"`
 	Requirements        string         `gorm:"type:text;not null" json:"requirements"`
 	Platforms           string         `gorm:"type:jsonb;not null" json:"platforms"`
@@ -92,10 +104,10 @@ type Task struct {
 	AuditedBy        *uuid.UUID   `gorm:"type:uuid;index" json:"auditedBy"`
 	AuditedAt        *time.Time   `json:"auditedAt"`
 	AuditNote        string       `gorm:"type:text" json:"auditNote"`
-	InviterID        *uuid.UUID   `gorm:"type:uuid;index" json:"inviterId"`
-	InviterType      string       `gorm:"type:varchar(50)" json:"inviterType"`
+	InviterID        *string      `gorm:"type:varchar(255);index" json:"inviterId"`
+	InviterType      string       `gorm:"type:varchar(50);check:inviter_type IS NULL OR inviter_type IN ('SERVICE_PROVIDER_STAFF', 'SERVICE_PROVIDER_ADMIN', 'OTHER')" json:"inviterType"`
 	Priority         TaskPriority `gorm:"type:varchar(10);not null;default:'MEDIUM'" json:"priority"`
-	Tags             string       `gorm:"type:text[]" json:"tags"`
+	Tags             []string     `gorm:"type:text[]" json:"tags"`
 	Version          int          `gorm:"type:int;not null;default:0" json:"version"`
 	CreatedAt        time.Time    `gorm:"not null;default:now()" json:"createdAt"`
 	UpdatedAt        time.Time    `gorm:"not null;default:now()" json:"updatedAt"`

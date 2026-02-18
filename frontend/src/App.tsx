@@ -4,18 +4,20 @@ import { ToastProvider } from './contexts/ToastContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import ErrorBoundary from './components/ErrorBoundary'
 import Login from './pages/Login'
-import DebugAuth from './pages/DebugAuth'
 import Dashboard from './pages/Dashboard'
 import InvitationCodes from './pages/InvitationCodes'
 import UserManagement from './pages/UserManagement'
 import MerchantInfo from './pages/MerchantInfo'
 import Merchants from './pages/Merchants'
 import ServiceProviderInfo from './pages/ServiceProviderInfo'
+import ServiceProviderDetail from './pages/ServiceProviderDetail'
 import ServiceProviders from './pages/ServiceProviders'
 import CreatorProfile from './pages/CreatorProfile'
 import TaskHall from './pages/TaskHall'
 import MyTasks from './pages/MyTasks'
+import TaskInvite from './pages/TaskInvite'
 import CreateCampaign from './pages/CreateCampaign'
+import CampaignApproval from './pages/CampaignApproval'
 import Recharge from './pages/Recharge'
 import CreditTransactions from './pages/CreditTransactions'
 import Withdrawal from './pages/Withdrawal'
@@ -30,7 +32,7 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<Login />} />
-              <Route path="/debug-auth" element={<DebugAuth />} />
+              <Route path="/invite/:code" element={<TaskInvite />} />
               <Route
                 path="/dashboard"
                 element={
@@ -68,6 +70,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <Merchants />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/service-provider/:id"
+            element={
+              <ProtectedRoute>
+                <ServiceProviderDetail />
               </ProtectedRoute>
             }
           />
@@ -116,6 +126,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <CreateCampaign />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/campaign-approval"
+            element={
+              <ProtectedRoute>
+                <CampaignApproval />
               </ProtectedRoute>
             }
           />

@@ -1,16 +1,39 @@
+// ============================================
+// PR Business System - 前端类型定义
+// ============================================
+//
+// 类型说明：
+// - string: 类型为 string 的字段
+// - number: 类型为 number 的字段
+// - boolean: 类型为 boolean 的字段
+// - string | null: 可选的字符串字段
+// - T | null: 可选的类型 T
+//
+// UUID 字段说明：
+// 后端使用 uuid.UUID 类型，前端使用 string 类型（因为 JSON 序列化会自动转换）
+// 以下字段在数据库中存储为 UUID，但前端类型定义为 string：
+// - id: string (UUID)
+// - userId: string (UUID)
+// - merchantId: string (UUID)
+// - creatorId: string | null (UUID, 可选)
+// - invitationCodeId: string (UUID)
+// - accountId: string (UUID)
+//
+// ============================================
+
 // 用户类型
 export interface User {
-  id: string
-  authCenterUserId: string
+  id: string // UUID
+  authCenterUserId: string // UUID
+  unionId: string | null // UUID，auth-center 的 UnionID
   nickname: string
   avatarUrl: string
   profile: Record<string, any>
   roles: string[]
-  currentRole: string
-  lastUsedRole: string
   status: string
   lastLoginAt: string | null
   lastLoginIp: string
+  fixedInvitationCode: string // 用户固定邀请码
   createdAt: string
   updatedAt: string
 }
@@ -34,17 +57,11 @@ export interface LoginResponse {
   nickname?: string
   avatarUrl?: string
   roles: string[]
-  currentRole: string
 }
 
 // 刷新令牌请求
 export interface RefreshTokenRequest {
   refreshToken: string
-}
-
-// 切换角色请求
-export interface SwitchRoleRequest {
-  newRole: string
 }
 
 // API错误响应
@@ -56,27 +73,44 @@ export interface ApiError {
 export interface InvitationCode {
   id: string
   code: string
-  codeType: 'ADMIN_MASTER' | 'SP_ADMIN' | 'MERCHANT' | 'CREATOR' | 'STAFF'
-  ownerId: string
-  ownerType: 'super_admin' | 'service_provider' | 'merchant'
-  status: 'active' | 'disabled' | 'expired' | 'used'
-  maxUses: number
+  type: string
+  targetRole: string
+  generatorId: string
+  generatorType: 'system' | 'super_admin' | 'merchant_admin' | 'service_provider_admin' | 'service_provider_staff'
+  organizationId: string | null
+  organizationType: 'merchant' | 'service_provider' | null
+  organizationName?: string // 组织名称（用于显示）
+  isActive: boolean
+  isOneTime: boolean
+  maxUses: number | null
   useCount: number
-  expiresAt: string | null
-  usedBy: string[]
-  metadata: Record<string, any>
   createdAt: string
   updatedAt: string
-  deletedAt: string | null
 }
 
-// 创建邀请码请求
-export interface CreateInvitationCodeRequest {
-  codeType: string
-  ownerId: string
-  ownerType: string
-  maxUses?: number
-  expiresAt?: string
+// 邀请关系类型
+export interface InvitationRelationship {
+	id: string
+	inviterId: string
+	inviterRole: string
+	inviteeId: string
+	inviteeRole: string
+	organizationId: string | null
+	organizationType: string | null
+	invitationCode: string
+	invitedAt: string
+	status: string
+	invitee?: {
+		id: string
+		nickname: string
+		avatarUrl: string
+	}
+}
+
+// 获取我的邀请列表响应
+export interface GetMyInvitationsResponse {
+	invitations: InvitationRelationship[]
+	total: number
 }
 
 // 使用邀请码请求
@@ -85,12 +119,42 @@ export interface UseInvitationCodeRequest {
   userId: string
 }
 
-// 使用邀请码响应
+// 使用邀请码响应（与后端 POST /api/v1/invitations/use 一致）
 export interface UseInvitationCodeResponse {
   message: string
   code: string
-  codeType: string
-  ownerId: string
+  targetRole: string
+  userRoles: string[]
+  activeRole: string
+  error?: string  // 添加可选的error字段
+}
+
+// 可邀请的角色类型（固定邀请码）
+export interface InvitableRole {
+  role: string
+  code: string
+  label: string
+}
+
+// 预生成的邀请码（后端生成并保存）
+export interface GeneratedInvitationCode {
+  code: string
+  role: string
+  roleLabel: string
+  orgId?: string
+  orgName?: string
+  orgType?: string
+}
+
+// 获取我的固定邀请码响应
+export interface GetMyFixedInvitationCodesResponse {
+  invitationCodes: GeneratedInvitationCode[]
+  userRoles: string[]
+  organizations: Array<{
+    id: string
+    name: string
+    type: string
+  }>
 }
 
 // 商家类型
@@ -273,7 +337,7 @@ export interface Campaign {
   quota: number
   taskDeadline: string
   submissionDeadline: string
-  status: 'DRAFT' | 'OPEN' | 'CLOSED'
+  status: 'DRAFT' | 'PENDING_APPROVAL' | 'OPEN' | 'CLOSED'
   createdAt: string
   updatedAt: string
   deletedAt: string | null
@@ -362,6 +426,54 @@ export interface TasksResponse {
   page_size: number
 }
 
+// 任务邀请类型
+export interface TaskInvitationCode {
+  id: string
+  code: string
+  campaignId: string
+  generatorId: string
+  generatorType: 'merchant_admin' | 'provider_admin' | 'merchant_staff' | 'provider_staff'
+  maxUses: number
+  useCount: number
+  expiresAt: string | null
+  createdAt: string
+  updatedAt: string
+  campaign?: Campaign
+}
+
+export interface TaskInvitation {
+  id: string
+  invitationCodeId: string
+  creatorId: string | null
+  taskId: string | null
+  status: 'accepted' | 'completed' | 'expired'
+  acceptedAt: string
+  completedAt: string | null
+  createdAt: string
+  invitationCode?: TaskInvitationCode
+  task?: Task
+}
+
+export interface GenerateTaskInvitationCodeRequest {
+  campaignId: string
+  maxUses?: number
+  expiresIn?: number // 过期时间（秒）
+}
+
+export interface GenerateTaskInvitationCodeResponse {
+  invitationUrl: string
+  code: string
+  maxUses: number
+  expiresAt: string
+}
+
+export interface ValidateTaskInvitationCodeResponse {
+  invitationCode: TaskInvitationCode
+  campaign: Campaign
+  tasks: Task[]
+  totalTasks: number
+}
+
 // 积分账户类型
 export interface CreditAccount {
   id: string
@@ -371,6 +483,12 @@ export interface CreditAccount {
   frozenBalance: number
   createdAt: string
   updatedAt: string
+}
+
+// 带权限的积分账户（GET /api/v1/credit/accounts 返回）
+export interface CreditAccountWithPermission extends CreditAccount {
+  canView: boolean
+  canOperate: boolean
 }
 
 // 积分流水类型

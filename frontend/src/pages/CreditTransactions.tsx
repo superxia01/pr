@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { creditApi } from '../services/api'
-import type { CreditTransaction } from '../types'
+import type { CreditTransaction, CreditAccount } from '../types'
 import { DataTable } from '../components/ui/data-table'
 import type { ColumnDef } from '../components/ui/data-table'
 
 export default function CreditTransactions() {
   const [transactions, setTransactions] = useState<CreditTransaction[]>([])
+  const [balance, setBalance] = useState<CreditAccount | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [page, setPage] = useState(0) // DataTable使用0-based索引
@@ -16,6 +17,10 @@ export default function CreditTransactions() {
   useEffect(() => {
     loadTransactions()
   }, [page, filter])
+
+  useEffect(() => {
+    creditApi.getBalance().then(setBalance).catch(() => setBalance(null))
+  }, [])
 
   const loadTransactions = async () => {
     setLoading(true)
@@ -127,6 +132,20 @@ export default function CreditTransactions() {
             <h1 className="text-2xl font-bold text-gray-900">积分明细</h1>
             <p className="mt-1 text-sm text-gray-500">查看您的积分流水记录</p>
           </div>
+
+          {/* 当前余额 */}
+          {balance != null && (
+            <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
+              <div className="flex items-baseline gap-4">
+                <span className="text-sm text-gray-600">当前余额</span>
+                <span className="text-2xl font-bold text-gray-900">{balance.balance.toLocaleString()}</span>
+                <span className="text-sm text-gray-500">积分</span>
+                {balance.frozenBalance > 0 && (
+                  <span className="text-sm text-gray-500">冻结：{balance.frozenBalance.toLocaleString()}</span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* 内容 */}
           <div className="p-6">
